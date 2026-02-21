@@ -68,6 +68,7 @@ def _parse_args(argv: list[str], *, prog: str) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     prog = Path(sys.argv[0]).name or "mwouettes"
     args = _parse_args(sys.argv[1:] if argv is None else argv, prog=prog)
+    auto_ui = False
 
     if args.list_interfaces:
         names = list_interfaces()
@@ -106,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{prog}] --interface est requis (sauf avec --ui/--list-interfaces/--list-audio-devices).", file=sys.stderr)
             return 2
         args.ui = True
+        auto_ui = True
 
     if args.record and args.ui:
         print(f"[{prog}] --record n’est pas supporté en mode --ui (l’audio est côté navigateur).", file=sys.stderr)
@@ -224,6 +226,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.ui:
             url = f"http://{args.ui_host}:{int(args.ui_port)}/"
             print(f"[{prog}] UI: {url}", file=sys.stderr)
+            if auto_ui or not args.interface:
+                print(f"[{prog}] Pense à sélectionner une interface dans l’UI (menu “Interface”).", file=sys.stderr)
             cap = CaptureManager(
                 counters=counters,
                 app_stop_event=stop_event,
