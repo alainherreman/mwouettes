@@ -4,6 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 import ipaddress
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -34,6 +35,19 @@ class TrafficCounters:
             return snap
 
 
+def find_exe(name: str) -> str | None:
+    p = shutil.which(name)
+    if p:
+        return p
+    for cand in (f"/usr/sbin/{name}", f"/usr/bin/{name}", f"/sbin/{name}", f"/bin/{name}"):
+        try:
+            if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                return cand
+        except Exception:
+            continue
+    return None
+
+
 def list_interfaces() -> list[str]:
     """
     Liste les interfaces disponibles.
@@ -51,7 +65,7 @@ def list_interfaces() -> list[str]:
     except Exception:
         pass
 
-    ip_bin = shutil.which("ip")
+    ip_bin = find_exe("ip")
     if ip_bin is not None:
         try:
             out = subprocess.check_output([ip_bin, "-o", "link", "show"], text=True, stderr=subprocess.STDOUT)
@@ -85,7 +99,7 @@ def classify_packet(packet: object, local_ips: set[str]) -> list[str]:
       - in.dns / out.dns
       - in.total / out.total
     """
-    keys: list[str] = []
+    keys_set: set[str] = set()
 
     # Import scapy de façon lazy pour permettre --dry-run sans dépendance.
     try:
@@ -113,8 +127,9 @@ def classify_packet(packet: object, local_ips: set[str]) -> list[str]:
         direction = "in"
 
     if direction in ("in", "out"):
-        keys.append(f"{direction}.total")
-        keys.append("net.total")
+        keys_set.add(f"{direction}.total")
+    # Toujours compter un total, même si la direction est inconnue (ex: local_ips vide).
+    keys_set.add("net.total")
 
     proto = None
     sport = None
@@ -133,17 +148,19 @@ def classify_packet(packet: object, local_ips: set[str]) -> list[str]:
     elif packet.haslayer(ICMP):  # type: ignore[attr-defined]
         proto = "icmp"
 
-    if proto is not None and direction in ("in", "out"):
-        keys.append(f"{direction}.{proto}")
-        keys.append(f"{proto}.total")
+    if proto is not None:
+        keys_set.add(f"{proto}.total")
+        if direction in ("in", "out"):
+            keys_set.add(f"{direction}.{proto}")
 
     # Services (simple heuristique par port)
-    if direction in ("in", "out") and proto in ("tcp", "udp") and (sport is not None and dport is not None):
+    if proto in ("tcp", "udp") and (sport is not None and dport is not None):
         if sport == 53 or dport == 53:
-            keys.append(f"{direction}.dns")
-            keys.append("dns.total")
+            keys_set.add("dns.total")
+            if direction in ("in", "out"):
+                keys_set.add(f"{direction}.dns")
 
-    return keys
+    return sorted(keys_set)
 
 
 def get_local_ips_for_iface(interface: str) -> set[str]:
@@ -156,7 +173,7 @@ def get_local_ips_for_iface(interface: str) -> set[str]:
     """
     ips: set[str] = set()
 
-    ip_bin = shutil.which("ip")
+    ip_bin = find_exe("ip")
     if ip_bin is not None:
         try:
             out = subprocess.check_output([ip_bin, "-j", "addr", "show", "dev", interface], text=True)
@@ -168,7 +185,23 @@ def get_local_ips_for_iface(interface: str) -> set[str]:
                         if local != "0.0.0.0":
                             ips.add(_normalize_ip(local))
         except Exception:
-            pass
+            # Fallback non-JSON (plus portable).
+            try:
+                out4 = subprocess.check_output([ip_bin, "-o", "-4", "addr", "show", "dev", interface], text=True)
+                for line in out4.splitlines():
+                    m = re.search(r"\binet\s+(\S+?)(?:/\d+)?\b", line)
+                    if m:
+                        ips.add(_normalize_ip(m.group(1).split("/", 1)[0]))
+            except Exception:
+                pass
+            try:
+                out6 = subprocess.check_output([ip_bin, "-o", "-6", "addr", "show", "dev", interface], text=True)
+                for line in out6.splitlines():
+                    m = re.search(r"\binet6\s+(\S+?)(?:/\d+)?\b", line)
+                    if m:
+                        ips.add(_normalize_ip(m.group(1).split("/", 1)[0]))
+            except Exception:
+                pass
 
     if ips:
         return ips
@@ -298,22 +331,25 @@ def classify_tcpdump_line(line: str, local_ips: set[str]) -> list[str]:
     elif dst_ip is not None and dst_ip in local_ips:
         direction = "in"
 
-    keys: list[str] = []
+    keys_set: set[str] = set()
     if direction in ("in", "out"):
-        keys.append(f"{direction}.total")
-        keys.append("net.total")
+        keys_set.add(f"{direction}.total")
+    keys_set.add("net.total")
 
     proto = _proto_from_tail(tail)
-    if proto is not None and direction in ("in", "out"):
-        keys.append(f"{direction}.{proto}")
-        keys.append(f"{proto}.total")
+    if proto is not None:
+        keys_set.add(f"{proto}.total")
+        if direction in ("in", "out"):
+            keys_set.add(f"{direction}.{proto}")
 
     if direction in ("in", "out") and proto in ("tcp", "udp"):
         if src_port == 53 or dst_port == 53:
-            keys.append(f"{direction}.dns")
-            keys.append("dns.total")
+            keys_set.add(f"{direction}.dns")
+            keys_set.add("dns.total")
+    elif proto in ("tcp", "udp") and (src_port == 53 or dst_port == 53):
+        keys_set.add("dns.total")
 
-    return keys
+    return sorted(keys_set)
 
 
 class TcpdumpSniffer(threading.Thread):
@@ -337,7 +373,7 @@ class TcpdumpSniffer(threading.Thread):
     def run(self) -> None:
         import sys
 
-        tcpdump = shutil.which("tcpdump")
+        tcpdump = find_exe("tcpdump")
         if tcpdump is None:
             print("[flow-sonify] tcpdump introuvable (installez-le ou utilisez le backend scapy).", file=sys.stderr)
             self.stop_event.set()
@@ -439,12 +475,18 @@ class CaptureManager:
 
         backend = (self.capture_backend or "auto").lower()
         if backend == "auto":
-            backend = "tcpdump" if shutil.which("tcpdump") is not None else "scapy"
+            backend = "tcpdump" if find_exe("tcpdump") is not None else "scapy"
 
         stop = threading.Event()
         if backend == "scapy":
+            try:
+                import scapy  # noqa: F401
+            except Exception as e:
+                raise ValueError(f"backend scapy indisponible: {e}") from e
             sniffer = PcapSniffer(interface=iface, counters=self.counters, stop_event=stop, bpf_filter=self.bpf_filter)
         else:
+            if find_exe("tcpdump") is None:
+                raise ValueError("backend tcpdump indisponible: `tcpdump` introuvable")
             sniffer = TcpdumpSniffer(interface=iface, counters=self.counters, stop_event=stop, bpf_filter=self.bpf_filter)
 
         sniffer.start()

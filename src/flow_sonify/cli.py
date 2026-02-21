@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 
 from .audio import AudioEngine
-from .capture import CaptureManager, PcapSniffer, TcpdumpSniffer, TrafficCounters, list_interfaces
+from .capture import CaptureManager, PcapSniffer, TcpdumpSniffer, TrafficCounters, find_exe, list_interfaces
 from .config import AppConfig, load_config
 from .ui_server import run_ui_server
 
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
 
     capture_backend = args.capture_backend
     if capture_backend == "auto":
-        capture_backend = "tcpdump" if shutil.which("tcpdump") is not None else "scapy"
+        capture_backend = "tcpdump" if find_exe("tcpdump") is not None else "scapy"
 
     # Préflight deps (messages plus clairs que des traces dans un thread).
     if capture_backend == "scapy":
@@ -158,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
     elif capture_backend == "tcpdump":
-        if shutil.which("tcpdump") is None:
+        if find_exe("tcpdump") is None:
             print(f"[{prog}] backend tcpdump sélectionné mais `tcpdump` introuvable.", file=sys.stderr)
             return 2
 
