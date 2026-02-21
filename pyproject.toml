@@ -16,7 +16,6 @@ aplay = ["numpy>=1.26.0"]
 
 [project.scripts]
 flow-sonify = "flow_sonify.cli:main"
-birdflow = "flow_sonify.cli:main"
 mwouettes = "flow_sonify.cli:main"
 
 [build-system]
