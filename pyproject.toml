@@ -1,0 +1,33 @@
+[project]
+name = "flow-sonify"
+version = "0.1.0"
+description = "Sonification temps-réel du trafic réseau (entrant/sortant)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "flow-sonify contributors" }]
+
+dependencies = []
+
+[project.optional-dependencies]
+pcap = ["scapy>=2.5.0"]
+audio = ["numpy>=1.26.0", "sounddevice>=0.4.6"]
+aplay = ["numpy>=1.26.0"]
+
+[project.scripts]
+flow-sonify = "flow_sonify.cli:main"
+birdflow = "flow_sonify.cli:main"
+mwouettes = "flow_sonify.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"flow_sonify.web" = ["*.html", "*.js", "*.css"]

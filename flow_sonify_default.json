@@ -1,0 +1,93 @@
+{
+  "active_environment": "",
+  "ambience": {
+    "loops": {},
+    "one_shots": {}
+  },
+  "block_ms": 100,
+  "bpf_filter": "",
+  "channels": {
+    "in.dns": {
+      "duration_ms": 60,
+      "freq_hz": 2100.0,
+      "gain": 0.165,
+      "gamma": 0.75,
+      "mode": "one-shot",
+      "ref_pps": 25.0,
+      "sample": "birds.ogg"
+    },
+    "in.icmp": {
+      "duration_ms": 140,
+      "freq_hz": 1700.0,
+      "gain": 0.16,
+      "gamma": 0.8,
+      "mode": "one-shot",
+      "ref_pps": 10.0,
+      "sample": "gulls.ogg"
+    },
+    "in.tcp": {
+      "duration_ms": 70,
+      "freq_hz": 1250.0,
+      "gain": 0.14,
+      "gamma": 0.7,
+      "mode": "loop",
+      "ref_pps": 60.0,
+      "sample": "waves.ogg"
+    },
+    "in.udp": {
+      "duration_ms": 90,
+      "freq_hz": 750.0,
+      "gain": 0.13,
+      "gamma": 0.75,
+      "mode": "loop",
+      "ref_pps": 50.0,
+      "sample": "wind.ogg"
+    },
+    "out.dns": {
+      "duration_ms": 60,
+      "freq_hz": 1950.0,
+      "gain": 0.14,
+      "gamma": 0.75,
+      "mode": "one-shot",
+      "ref_pps": 25.0,
+      "sample": "birds.ogg"
+    },
+    "out.icmp": {
+      "duration_ms": 140,
+      "freq_hz": 1500.0,
+      "gain": 0.14,
+      "gamma": 0.8,
+      "mode": "one-shot",
+      "ref_pps": 10.0,
+      "sample": "gulls.ogg"
+    },
+    "out.tcp": {
+      "duration_ms": 70,
+      "freq_hz": 1050.0,
+      "gain": 0.12,
+      "gamma": 0.7,
+      "mode": "loop",
+      "ref_pps": 60.0,
+      "sample": "waves.ogg"
+    },
+    "out.udp": {
+      "duration_ms": 90,
+      "freq_hz": 650.0,
+      "gain": 0.12,
+      "gamma": 0.75,
+      "mode": "loop",
+      "ref_pps": 50.0,
+      "sample": "wind.ogg"
+    }
+  },
+  "environments": {},
+  "river": {
+    "cutoff_hz": 900.0,
+    "gain": 0.32,
+    "gamma": 0.65,
+    "mode": "noise",
+    "ref_pps": 250.0,
+    "sample": ""
+  },
+  "sample_rate": 48000
+}

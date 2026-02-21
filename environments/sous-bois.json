@@ -1,0 +1,16 @@
+{
+  "name": "sous-bois",
+  "river": {
+    "cutoff_hz": 900.0,
+    "gain": 0.22,
+    "gamma": 0.65,
+    "ref_pps": 250.0,
+    "sample": "river.ogg"
+  },
+  "channels": {
+    "net.total": { "enabled": false, "mode": "loop", "sample": "@noise", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65 },
+    "tcp.total": { "enabled": true, "mode": "loop", "sample": "wind.ogg", "freq_hz": 220.0, "duration_ms": 0, "gain": 0.12, "ref_pps": 140.0, "gamma": 0.70 },
+    "dns.total": { "enabled": true, "mode": "one-shot", "sample": "birds.ogg", "freq_hz": 2100.0, "duration_ms": 60, "gain": 0.28, "ref_pps": 20.0, "gamma": 0.85 }
+  }
+}
+

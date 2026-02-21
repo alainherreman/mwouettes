@@ -1,0 +1,22 @@
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+.DS_Store
+
+# Large binary samples (download via script or import via UI)
+samples/*
+!samples/.gitkeep
+!samples/README.md
+!samples/SOURCES.md
+
+# User runtime data
+configs/*.json
+!configs/.gitkeep
+environments/*.json
+!environments/sous-bois.json
+!environments/bord-de-mer.json
