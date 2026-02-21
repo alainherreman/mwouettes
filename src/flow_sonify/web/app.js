@@ -1491,6 +1491,20 @@ function drawCharts(counts, blockMs) {
   if (boxPps) boxPps.style.display = uiState.showChartPps ? "" : "none";
   if (boxTop) boxTop.style.display = uiState.showChartTop ? "" : "none";
 
+  const dirSum = (counts["in.total"] || 0) + (counts["out.total"] || 0);
+  const dirAvailable = dirSum > 0;
+  const labIn = els("chartTopInLabel");
+  const labOut = els("chartTopOutLabel");
+  if (labIn && labOut) {
+    if (dirAvailable) {
+      labIn.textContent = "in.*";
+      labOut.textContent = "out.*";
+    } else {
+      labIn.textContent = "total.* (direction inconnue)";
+      labOut.textContent = "total.* (direction inconnue)";
+    }
+  }
+
   if (uiState.showChartPps) {
     const c1 = els("chartPps");
     const ctx1 = c1.getContext("2d");
@@ -1528,6 +1542,8 @@ function drawTypeBars(canvasId, counts, blockMs, prefix) {
   drawAxes(ctx, w, h);
 
   const dt = blockMs / 1000.0;
+  const dirSum = (counts["in.total"] || 0) + (counts["out.total"] || 0);
+  const dirAvailable = dirSum > 0;
   const types = [
     { t: "tcp", color: COLORS.barTcp },
     { t: "udp", color: COLORS.barUdp },
@@ -1536,7 +1552,7 @@ function drawTypeBars(canvasId, counts, blockMs, prefix) {
   ];
   const items = types.map(({ t, color }) => ({
     label: t,
-    v: (counts[`${prefix}${t}`] || 0) / dt,
+    v: (dirAvailable ? (counts[`${prefix}${t}`] || 0) : (counts[`${t}.total`] || 0)) / dt,
     color,
   }));
 

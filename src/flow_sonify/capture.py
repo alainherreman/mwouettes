@@ -314,6 +314,8 @@ def _proto_from_tail(tail: str) -> str | None:
         return "udp"
     if "ICMP" in t:
         return "icmp"
+    if "TCP" in t:
+        return "tcp"
     if "FLAGS" in t or "SEQ" in t or "ACK" in t:
         return "tcp"
     return None
@@ -355,6 +357,10 @@ def classify_tcpdump_line(line: str, local_ips: set[str]) -> list[str]:
     keys_set.add("net.total")
 
     proto = _proto_from_tail(tail)
+    if proto is None and (src_port is not None or dst_port is not None):
+        # Avec `tcpdump -q`, il arrive que le tail ne contienne pas "Flags/Seq/Ack".
+        # Si on a des ports, c'est très probablement TCP.
+        proto = "tcp"
     if proto is not None:
         keys_set.add(f"{proto}.total")
         if direction in ("in", "out"):
@@ -400,6 +406,12 @@ class TcpdumpSniffer(threading.Thread):
             return
 
         cmd = [tcpdump, "-l", "-n", "-tt", "-q", "-i", self.interface]
+        # Note: `-q` peut supprimer des détails utiles pour classifier TCP selon les versions.
+        # On le retire pour une détection plus fiable.
+        try:
+            cmd.remove("-q")
+        except ValueError:
+            pass
         if self.bpf_filter:
             cmd.append(self.bpf_filter)
 
