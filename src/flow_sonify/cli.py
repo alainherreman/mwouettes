@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import shutil
 import subprocess
@@ -41,6 +42,8 @@ def _parse_args(argv: list[str], *, prog: str) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog=prog, description="mwouettes — sonification temps-réel du trafic réseau (entrant/sortant).")
     p.add_argument("--list-interfaces", action="store_true", help="Liste les interfaces et sort.")
     p.add_argument("--list-audio-devices", action="store_true", help="Liste les périphériques audio (sounddevice/aplay) et sort.")
+    p.add_argument("--sudo", action="store_true", help="Force le lancement via sudo (pour la capture).")
+    p.add_argument("--no-sudo", action="store_true", help="Désactive l’auto-sudo (pour debug).")
     p.add_argument("--interface", "-i", help="Interface réseau à sniffer (ex: eth0, wlan0).")
     p.add_argument("--config", help="Chemin vers un JSON de configuration (sinon valeurs par défaut).")
     p.add_argument("--bpf", help="Filtre BPF (libpcap), ex: 'ip and (tcp or udp)'.")
@@ -65,9 +68,52 @@ def _parse_args(argv: list[str], *, prog: str) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def _should_escalate(args: argparse.Namespace, argv_effective: list[str]) -> bool:
+    """
+    Détermine s'il faut relancer via sudo.
+    Important pour la capture (tcpdump/scapy) qui requiert souvent des privilèges.
+    """
+    if bool(getattr(args, "no_sudo", False)):
+        return False
+    if bool(getattr(args, "sudo", False)):
+        return True
+
+    # Si on va de toute façon refuser faute d'interface, inutile de demander sudo.
+    if (not bool(getattr(args, "ui", False))) and (not bool(getattr(args, "interface", None))) and (
+        bool(getattr(args, "dry_run", False)) or bool(getattr(args, "record", None))
+    ):
+        return False
+
+    # Auto: on évite sudo pour l'aide + listages. Le reste implique potentiellement
+    # une capture (UI ou CLI) => sudo.
+    safe = {"-h", "--help", "--list-interfaces", "--list-audio-devices"}
+    if not argv_effective:
+        return True  # `mwouettes` seul => UI => capture probable
+    if all(a in safe for a in argv_effective):
+        return False
+    return True
+
+
+def _reexec_with_sudo(prog: str, argv_effective: list[str]) -> int:
+    sudo = shutil.which("sudo") or find_exe("sudo")
+    if sudo is None:
+        print(f"[{prog}] sudo introuvable. Installe sudo ou lance en root.", file=sys.stderr)
+        return 2
+
+    # Forward args, but avoid infinite recursion.
+    forwarded = [a for a in argv_effective if a not in ("--sudo", "--no-sudo")]
+    if not forwarded:
+        forwarded = ["--ui"]
+
+    cmd = [sudo, "-E", sys.executable, "-m", "flow_sonify.cli", "--no-sudo", *forwarded]
+    os.execvp(cmd[0], cmd)
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv_effective = sys.argv[1:] if argv is None else list(argv)
     prog = Path(sys.argv[0]).name or "mwouettes"
-    args = _parse_args(sys.argv[1:] if argv is None else argv, prog=prog)
+    args = _parse_args(argv_effective, prog=prog)
     auto_ui = False
 
     if args.list_interfaces:
@@ -108,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         args.ui = True
         auto_ui = True
+
+    if _should_escalate(args, argv_effective) and os.geteuid() != 0:
+        return _reexec_with_sudo(prog, argv_effective)
 
     if args.record and args.ui:
         print(f"[{prog}] --record n’est pas supporté en mode --ui (l’audio est côté navigateur).", file=sys.stderr)

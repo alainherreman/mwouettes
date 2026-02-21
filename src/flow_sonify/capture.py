@@ -248,6 +248,7 @@ class PcapSniffer(threading.Thread):
         self.counters = counters
         self.stop_event = stop_event
         self.bpf_filter = bpf_filter
+        self.error: str | None = None
 
         self.local_ips = get_local_ips_for_iface(interface)
 
@@ -255,6 +256,7 @@ class PcapSniffer(threading.Thread):
         try:
             from scapy.all import sniff
         except Exception:
+            self.error = "scapy introuvable"
             return
 
         def on_packet(pkt: object) -> None:
@@ -279,6 +281,7 @@ class PcapSniffer(threading.Thread):
             # Typiquement: permissions (CAP_NET_RAW), interface invalide, libpcap manquant…
             import sys
 
+            self.error = str(e)
             print(f"[flow-sonify] capture error: {e}", file=sys.stderr)
             self.stop_event.set()
 
@@ -319,7 +322,22 @@ def _proto_from_tail(tail: str) -> str | None:
 def classify_tcpdump_line(line: str, local_ips: set[str]) -> list[str]:
     m = _TCPDUMP_RE.search(line)
     if not m:
-        return []
+        # Fallback: certains formats tcpdump peuvent varier (ou inclure des champs).
+        # On essaye au moins de compter un total pour le "ruisseau".
+        u = line.upper()
+        if " IP " not in u and "IP6 " not in u and not u.startswith("IP ") and not u.startswith("IP6 "):
+            return []
+        keys: set[str] = {"net.total"}
+        if "UDP" in u:
+            keys.add("udp.total")
+        elif "ICMP" in u:
+            keys.add("icmp.total")
+        elif "TCP" in u or "FLAGS" in u or "SEQ" in u or "ACK" in u:
+            keys.add("tcp.total")
+        # DNS heuristic: port 53 appears often as ".53" (IPv4) or ".53:".
+        if ".53" in line:
+            keys.add("dns.total")
+        return sorted(keys)
 
     _ip_kind, src_ep, dst_ep, tail = m.groups()
     src_ip, src_port = _split_endpoint(src_ep)
@@ -366,6 +384,7 @@ class TcpdumpSniffer(threading.Thread):
         self.counters = counters
         self.stop_event = stop_event
         self.bpf_filter = bpf_filter
+        self.error: str | None = None
 
         self.local_ips = get_local_ips_for_iface(interface)
         self._proc: subprocess.Popen[str] | None = None
@@ -376,6 +395,7 @@ class TcpdumpSniffer(threading.Thread):
         tcpdump = find_exe("tcpdump")
         if tcpdump is None:
             print("[flow-sonify] tcpdump introuvable (installez-le ou utilisez le backend scapy).", file=sys.stderr)
+            self.error = "tcpdump introuvable"
             self.stop_event.set()
             return
 
@@ -392,11 +412,29 @@ class TcpdumpSniffer(threading.Thread):
                 bufsize=1,
             )
         except Exception as e:
+            self.error = str(e)
             print(f"[flow-sonify] tcpdump launch error: {e}", file=sys.stderr)
             self.stop_event.set()
             return
 
         assert self._proc.stdout is not None
+        # Early failure (e.g., permissions / bad interface).
+        try:
+            time.sleep(0.10)
+        except Exception:
+            pass
+        if self._proc.poll() is not None:
+            try:
+                err = (self._proc.stderr.read() if self._proc.stderr is not None else "")  # type: ignore[union-attr]
+            except Exception:
+                err = ""
+            msg = err.strip() or f"tcpdump exited with code {self._proc.returncode}"
+            self.error = msg
+            if msg:
+                print(f"[flow-sonify] tcpdump error: {msg}", file=sys.stderr)
+            self.stop_event.set()
+            return
+
         # Poll stderr occasionally for early failures.
         stderr = self._proc.stderr
         last_stderr_check = time.monotonic()
@@ -415,9 +453,18 @@ class TcpdumpSniffer(threading.Thread):
                     if self._proc.poll() is not None:
                         err = stderr.read() if stderr else ""
                         if err:
+                            self.error = err.strip()
                             print(f"[flow-sonify] tcpdump error: {err.strip()}", file=sys.stderr)
                         self.stop_event.set()
                         break
+            # Process ended: capture stderr if any
+            if self._proc.poll() is not None and stderr is not None:
+                try:
+                    err = stderr.read()
+                except Exception:
+                    err = ""
+                if err and not self.error:
+                    self.error = err.strip()
         finally:
             self._terminate()
 
@@ -451,6 +498,7 @@ class CaptureManager:
         self._sniffer_stop: threading.Event | None = None
         self._interface: str | None = None
         self._backend_used: str | None = None
+        self._last_error: str | None = None
 
     @property
     def interface(self) -> str | None:
@@ -462,6 +510,17 @@ class CaptureManager:
         with self._lock:
             return self._backend_used
 
+    @property
+    def last_error(self) -> str | None:
+        with self._lock:
+            return self._last_error
+
+    @property
+    def running(self) -> bool:
+        with self._lock:
+            s = self._sniffer
+        return bool(s and s.is_alive())
+
     def set_interface(self, interface: str | None) -> None:
         iface = (interface or "").strip()
         if not iface:
@@ -469,6 +528,7 @@ class CaptureManager:
             with self._lock:
                 self._interface = None
                 self._backend_used = None
+                self._last_error = None
             return
 
         self._stop_current()
@@ -490,6 +550,18 @@ class CaptureManager:
             sniffer = TcpdumpSniffer(interface=iface, counters=self.counters, stop_event=stop, bpf_filter=self.bpf_filter)
 
         sniffer.start()
+        # Give the sniffer a moment; if it exits immediately, surface an error to the UI.
+        try:
+            time.sleep(0.12)
+        except Exception:
+            pass
+        if not sniffer.is_alive() or stop.is_set():
+            err = getattr(sniffer, "error", None) or "capture stopped immediately (permissions/interface?)"
+            with self._lock:
+                self._last_error = str(err)
+                self._backend_used = backend
+                self._interface = iface
+            raise ValueError(str(err))
 
         def stop_on_app_exit() -> None:
             self.app_stop_event.wait()
@@ -502,6 +574,7 @@ class CaptureManager:
             self._sniffer_stop = stop
             self._interface = iface
             self._backend_used = backend
+            self._last_error = None
 
     def _stop_current(self) -> None:
         sniffer: threading.Thread | None
@@ -513,6 +586,7 @@ class CaptureManager:
             self._sniffer_stop = None
             self._backend_used = None
             self._interface = None
+            self._last_error = None
 
         if stopper is not None:
             stopper.set()

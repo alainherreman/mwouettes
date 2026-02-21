@@ -370,6 +370,8 @@ class UiHandler(BaseHTTPRequestHandler):
                 {
                     "interface": cap.interface if cap else None,
                     "backend": cap.backend_used if cap else None,
+                    "running": cap.running if cap else False,
+                    "error": cap.last_error if cap else None,
                 },
             )
             return
@@ -457,7 +459,15 @@ class UiHandler(BaseHTTPRequestHandler):
                 if not isinstance(body, dict) or "interface" not in body:
                     raise ValueError("body must contain 'interface'")
                 cap.set_interface(str(body["interface"]))
-                self._json(200, {"interface": cap.interface, "backend": cap.backend_used})
+                self._json(
+                    200,
+                    {
+                        "interface": cap.interface,
+                        "backend": cap.backend_used,
+                        "running": cap.running,
+                        "error": cap.last_error,
+                    },
+                )
             except Exception as e:
                 self._json(400, {"error": str(e)})
             return

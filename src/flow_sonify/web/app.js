@@ -8,6 +8,8 @@ let samples = [];
 let interfaces = [];
 let currentIface = null;
 let captureBackend = null;
+let captureRunning = false;
+let captureError = null;
 let isRecording = false;
 let lang = "fr";
 
@@ -126,6 +128,7 @@ const I18N = {
     "opt.current": "(courant)",
     "status.capture": "capture: {{name}}{{backend}}",
     "status.capture_stopped": "capture: arrêtée",
+    "status.capture_not_running": "capture non active",
     "status.presets_loaded": "Presets chargés: {{n}}",
     "status.presets_none": "Aucun preset chargé (regarde le dossier environments/).",
 
@@ -286,6 +289,7 @@ const I18N = {
     "opt.current": "(current)",
     "status.capture": "capture: {{name}}{{backend}}",
     "status.capture_stopped": "capture: stopped",
+    "status.capture_not_running": "capture not running",
     "status.presets_loaded": "Presets loaded: {{n}}",
     "status.presets_none": "No presets loaded (check the environments/ folder).",
 
@@ -511,9 +515,13 @@ async function fetchInterfaceStatus() {
     const out = await r.json();
     currentIface = out.interface || null;
     captureBackend = out.backend || null;
+    captureRunning = !!out.running;
+    captureError = out.error || null;
   } catch {
     currentIface = null;
     captureBackend = null;
+    captureRunning = false;
+    captureError = null;
   }
 }
 
@@ -527,6 +535,8 @@ async function setInterface(name) {
   if (out.error) throw new Error(out.error);
   currentIface = out.interface || null;
   captureBackend = out.backend || null;
+  captureRunning = ("running" in out) ? !!out.running : captureRunning;
+  captureError = out.error || null;
 }
 
 async function envApply(name) {
@@ -613,8 +623,14 @@ function renderConfig() {
   }
   const st = els("ifaceStatus");
   if (st) {
-    if (currentIface) st.textContent = t("status.capture", { name: currentIface, backend: captureBackend ? ` (${captureBackend})` : "" });
-    else st.textContent = t("status.capture_stopped");
+    if (currentIface) {
+      const base = t("status.capture", { name: currentIface, backend: captureBackend ? ` (${captureBackend})` : "" });
+      if (captureError) st.textContent = `${base} — ${t("msg.error_prefix", { msg: captureError })}`;
+      else if (captureRunning === false) st.textContent = `${base} — ${t("status.capture_not_running")}`;
+      else st.textContent = base;
+    } else {
+      st.textContent = t("status.capture_stopped");
+    }
   }
 
   // environments
@@ -1391,10 +1407,11 @@ function attachRiverControls() {
 }
 
 function updateStats(counts) {
-  const total = (counts["in.total"] || 0) + (counts["out.total"] || 0);
-  const totalPps = total / (blockMs / 1000.0);
-  const inPps = (counts["in.total"] || 0) / (blockMs / 1000.0);
-  const outPps = (counts["out.total"] || 0) / (blockMs / 1000.0);
+  const dt = (blockMs / 1000.0);
+  const totalCount = (counts["net.total"] ?? ((counts["in.total"] || 0) + (counts["out.total"] || 0)));
+  const totalPps = totalCount / dt;
+  const inPps = (counts["in.total"] || 0) / dt;
+  const outPps = (counts["out.total"] || 0) / dt;
   els("ppsTotal").textContent = fmt(totalPps);
   els("ppsDir").textContent = `${fmt(inPps)} / ${fmt(outPps)}`;
 
@@ -1431,7 +1448,7 @@ function startEvents() {
 
 function pushHistory(counts, blockMs) {
   const dt = blockMs / 1000.0;
-  const total = ((counts["in.total"] || 0) + (counts["out.total"] || 0)) / dt;
+  const total = (counts["net.total"] ?? ((counts["in.total"] || 0) + (counts["out.total"] || 0))) / dt;
   const inn = (counts["in.total"] || 0) / dt;
   const out = (counts["out.total"] || 0) / dt;
   hist.total.push(total);
@@ -1778,6 +1795,7 @@ function initInterfaceControls() {
     setStatus(t("msg.loading"), true);
     try {
       await setInterface(sel.value);
+      await fetchInterfaceStatus();
       renderConfig();
       setStatus(currentIface ? t("status.capture", { name: currentIface, backend: captureBackend ? ` (${captureBackend})` : "" }) : t("status.capture_stopped"), true);
     } catch (e) {
