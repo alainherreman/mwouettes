@@ -99,9 +99,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{prog}] aucun backend pour lister l'audio (sounddevice/aplay).", file=sys.stderr)
         return 2
 
+    # UX: si l'utilisateur lance juste `mwouettes` sans option, on lance l'UI.
+    # Les modes CLI "record"/"dry-run" nécessitent une interface explicite.
     if not args.interface and not args.ui:
-        print(f"[{prog}] --interface est requis (sauf avec --ui/--list-interfaces/--list-audio-devices).", file=sys.stderr)
-        return 2
+        if args.record or args.dry_run:
+            print(f"[{prog}] --interface est requis (sauf avec --ui/--list-interfaces/--list-audio-devices).", file=sys.stderr)
+            return 2
+        args.ui = True
 
     if args.record and args.ui:
         print(f"[{prog}] --record n’est pas supporté en mode --ui (l’audio est côté navigateur).", file=sys.stderr)
