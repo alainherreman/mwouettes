@@ -29,6 +29,14 @@ Le plus simple (crée/maintient `.venv`, installe en editable, puis lance la com
 
 Par défaut ça lance l’UI (`--ui`). Le script utilise `sudo` automatiquement pour la capture (désactivable avec `./mwouettes --no-sudo`).
 
+## Commande système (option)
+
+Si tu veux pouvoir lancer `mwouettes` depuis n’importe où :
+
+```bash
+./scripts/install_mwouettes_command.sh
+```
+
 Lister les interfaces :
 
 ```bash
