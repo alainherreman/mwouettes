@@ -45,12 +45,34 @@ if [[ ! -x ".venv/bin/python" ]]; then
   python3 -m venv --system-site-packages .venv
 fi
 
-if [[ ${REINSTALL} -eq 1 || ! -x ".venv/bin/mwouettes" ]]; then
+venv_entry_ok=0
+if [[ -x ".venv/bin/mwouettes" ]]; then
+  sb="$(head -n 1 .venv/bin/mwouettes 2>/dev/null || true)"
+  if [[ "$sb" == "#!/usr/bin/env "* ]]; then
+    venv_entry_ok=1
+  elif [[ "$sb" == "#!"* ]]; then
+    interp="${sb#\#!}"
+    if [[ -x "$interp" ]]; then
+      venv_entry_ok=1
+    fi
+  fi
+fi
+
+need_install=0
+if [[ ${REINSTALL} -eq 1 || $venv_entry_ok -eq 0 ]]; then
+  need_install=1
+else
+  if ! .venv/bin/python -c "import flow_sonify" >/dev/null 2>&1; then
+    need_install=1
+  fi
+fi
+
+if [[ $need_install -eq 1 ]]; then
   if command -v flock >/dev/null 2>&1; then
     exec 9> ".venv/.mwouettes-install.lock"
     flock 9
   fi
-  .venv/bin/pip install -e . --no-build-isolation >/dev/null
+  .venv/bin/python -m pip install -e . --no-build-isolation >/dev/null
 fi
 
 if [[ $# -eq 0 ]]; then

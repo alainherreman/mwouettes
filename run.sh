@@ -13,6 +13,6 @@ if command -v flock >/dev/null 2>&1; then
   exec 9> ".venv/.mwouettes-install.lock"
   flock 9
 fi
-.venv/bin/pip install -e . --no-build-isolation >/dev/null
+.venv/bin/python -m pip install -e . --no-build-isolation >/dev/null
 
 exec .venv/bin/mwouettes "$@"
