@@ -1666,7 +1666,9 @@ function initEnvironmentControls() {
 
   els("envSave").addEventListener("click", async () => {
     const name = (els("envName").value || "").trim();
-    const overwrite = els("envOverwrite").checked;
+    // UX: si on sauve sous le nom du preset actif, on overwrite automatiquement.
+    const activeName = (config && (config.active_environment || "")) ? String(config.active_environment) : "";
+    const overwrite = (name && activeName && name === activeName) ? true : els("envOverwrite").checked;
     els("envStatus").textContent = t("msg.loading");
     try {
       if (!name) throw new Error(t("err.name_required"));

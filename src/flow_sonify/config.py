@@ -184,6 +184,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
 
     # Nouveau format: "channels"
     channels_raw = raw.get("channels", {}) or {}
+    has_explicit_channels = bool(isinstance(channels_raw, dict) and len(channels_raw) > 0)
     if isinstance(channels_raw, dict):
         for key, spec in channels_raw.items():
             if not isinstance(spec, dict):
@@ -223,8 +224,10 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
 
     active_environment = str(raw.get("active_environment", "") or "")
 
-    # If an active environment is selected, apply it by default.
-    if active_environment and active_environment in environments:
+    # If an active environment is selected, apply it by default ONLY when no explicit
+    # channel mapping was provided. In the UI, users select a preset once, then tweak
+    # the current mapping; we must not re-apply the preset on every patch.
+    if (not has_explicit_channels) and active_environment and active_environment in environments:
         env = environments[active_environment]
         river = env.river
         channels = env.channels
