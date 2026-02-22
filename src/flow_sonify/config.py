@@ -9,7 +9,7 @@ from typing import Any
 @dataclass(frozen=True)
 class RiverConfig:
     # filename under ./samples or builtin (@noise, @none)
-    sample: str = "@noise"
+    sample: str = "river.ogg"
     gain: float = 0.18
     ref_pps: float = 250.0
     gamma: float = 0.65
@@ -33,7 +33,7 @@ class ChannelConfig:
     mode: str = "one-shot"
     freq_hz: float = 1000.0
     duration_ms: int = 80  # utilisé pour chirp
-    sample: str = "@chirp"
+    sample: str = "birds.ogg"
     gain: float = 0.12
     ref_pps: float = 50.0
     gamma: float = 0.75
@@ -47,21 +47,21 @@ class EnvironmentConfig:
 
 def default_channels() -> dict[str, "ChannelConfig"]:
     return {
-        "in.tcp": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=1250.0, duration_ms=70, gain=0.14, ref_pps=60.0, gamma=0.70),
-        "out.tcp": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=1050.0, duration_ms=70, gain=0.12, ref_pps=60.0, gamma=0.70),
-        "in.udp": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=750.0, duration_ms=90, gain=0.13, ref_pps=50.0, gamma=0.75),
-        "out.udp": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=650.0, duration_ms=90, gain=0.12, ref_pps=50.0, gamma=0.75),
-        "in.icmp": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=1700.0, duration_ms=140, gain=0.16, ref_pps=10.0, gamma=0.80),
-        "out.icmp": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=1500.0, duration_ms=140, gain=0.14, ref_pps=10.0, gamma=0.80),
-        "in.dns": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=2100.0, duration_ms=60, gain=0.16, ref_pps=25.0, gamma=0.75),
-        "out.dns": ChannelConfig(mode="one-shot", sample="@chirp", freq_hz=1950.0, duration_ms=60, gain=0.14, ref_pps=25.0, gamma=0.75),
+        "in.tcp": ChannelConfig(mode="one-shot", sample="owl.ogg", freq_hz=1250.0, duration_ms=70, gain=0.14, ref_pps=60.0, gamma=0.70),
+        "out.tcp": ChannelConfig(mode="one-shot", sample="crow.ogg", freq_hz=1050.0, duration_ms=70, gain=0.12, ref_pps=60.0, gamma=0.70),
+        "in.udp": ChannelConfig(mode="one-shot", sample="cricket.ogg", freq_hz=750.0, duration_ms=90, gain=0.13, ref_pps=50.0, gamma=0.75),
+        "out.udp": ChannelConfig(mode="one-shot", sample="frog.oga", freq_hz=650.0, duration_ms=90, gain=0.12, ref_pps=50.0, gamma=0.75),
+        "in.icmp": ChannelConfig(mode="one-shot", sample="raven.ogg", freq_hz=1700.0, duration_ms=140, gain=0.16, ref_pps=10.0, gamma=0.80),
+        "out.icmp": ChannelConfig(mode="one-shot", sample="crow.ogg", freq_hz=1500.0, duration_ms=140, gain=0.14, ref_pps=10.0, gamma=0.80),
+        "in.dns": ChannelConfig(mode="one-shot", sample="birds.ogg", freq_hz=2100.0, duration_ms=60, gain=0.16, ref_pps=25.0, gamma=0.75),
+        "out.dns": ChannelConfig(mode="one-shot", sample="birds.ogg", freq_hz=1950.0, duration_ms=60, gain=0.14, ref_pps=25.0, gamma=0.75),
 
         # Totaux direction-indépendants (évite de doubler un loop sur in.* et out.*).
-        "net.total": ChannelConfig(enabled=False, mode="loop", sample="@noise", freq_hz=0.0, duration_ms=0, gain=0.0, ref_pps=250.0, gamma=0.65),
-        "tcp.total": ChannelConfig(enabled=False, mode="loop", sample="@drone", freq_hz=220.0, duration_ms=0, gain=0.0, ref_pps=120.0, gamma=0.70),
-        "udp.total": ChannelConfig(enabled=False, mode="loop", sample="@drone", freq_hz=180.0, duration_ms=0, gain=0.0, ref_pps=100.0, gamma=0.75),
-        "icmp.total": ChannelConfig(enabled=False, mode="one-shot", sample="@chirp", freq_hz=1600.0, duration_ms=120, gain=0.0, ref_pps=10.0, gamma=0.80),
-        "dns.total": ChannelConfig(enabled=False, mode="one-shot", sample="@chirp", freq_hz=2100.0, duration_ms=60, gain=0.0, ref_pps=25.0, gamma=0.75),
+        "net.total": ChannelConfig(enabled=False, mode="loop", sample="river.ogg", freq_hz=0.0, duration_ms=0, gain=0.0, ref_pps=250.0, gamma=0.65),
+        "tcp.total": ChannelConfig(enabled=False, mode="loop", sample="wind.ogg", freq_hz=220.0, duration_ms=0, gain=0.0, ref_pps=120.0, gamma=0.70),
+        "udp.total": ChannelConfig(enabled=False, mode="loop", sample="waves.ogg", freq_hz=180.0, duration_ms=0, gain=0.0, ref_pps=100.0, gamma=0.75),
+        "icmp.total": ChannelConfig(enabled=False, mode="one-shot", sample="crow.ogg", freq_hz=1600.0, duration_ms=120, gain=0.0, ref_pps=10.0, gamma=0.80),
+        "dns.total": ChannelConfig(enabled=False, mode="one-shot", sample="birds.ogg", freq_hz=2100.0, duration_ms=60, gain=0.0, ref_pps=25.0, gamma=0.75),
     }
 
 
@@ -135,21 +135,21 @@ def _default_config_raw() -> dict[str, Any]:
             "sous-bois": {
                 "river": {"sample": "river.ogg", "gain": 0.22, "ref_pps": 250.0, "gamma": 0.65, "cutoff_hz": 900.0},
                 "channels": {
-                    "net.total": {"enabled": False, "mode": "loop", "sample": "@noise", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65},
+                    "net.total": {"enabled": False, "mode": "loop", "sample": "river.ogg", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65},
                     "tcp.total": {"enabled": True, "mode": "loop", "sample": "wind.ogg", "freq_hz": 220.0, "duration_ms": 0, "gain": 0.12, "ref_pps": 140.0, "gamma": 0.70},
-                    "udp.total": {"enabled": False, "mode": "loop", "sample": "@drone", "freq_hz": 180.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 100.0, "gamma": 0.75},
+                    "udp.total": {"enabled": False, "mode": "loop", "sample": "waves.ogg", "freq_hz": 180.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 100.0, "gamma": 0.75},
                     "dns.total": {"enabled": True, "mode": "one-shot", "sample": "birds.ogg", "freq_hz": 2100.0, "duration_ms": 60, "gain": 0.28, "ref_pps": 20.0, "gamma": 0.85},
-                    "icmp.total": {"enabled": False, "mode": "one-shot", "sample": "@chirp", "freq_hz": 1600.0, "duration_ms": 120, "gain": 0.0, "ref_pps": 10.0, "gamma": 0.80},
+                    "icmp.total": {"enabled": False, "mode": "one-shot", "sample": "crow.ogg", "freq_hz": 1600.0, "duration_ms": 120, "gain": 0.0, "ref_pps": 10.0, "gamma": 0.80},
                 },
             },
             "bord-de-mer": {
                 "river": {"sample": "waves.ogg", "gain": 0.24, "ref_pps": 250.0, "gamma": 0.65, "cutoff_hz": 900.0},
                 "channels": {
-                    "net.total": {"enabled": False, "mode": "loop", "sample": "@noise", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65},
+                    "net.total": {"enabled": False, "mode": "loop", "sample": "waves.ogg", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65},
                     "tcp.total": {"enabled": True, "mode": "loop", "sample": "wind.ogg", "freq_hz": 220.0, "duration_ms": 0, "gain": 0.12, "ref_pps": 140.0, "gamma": 0.70},
-                    "udp.total": {"enabled": False, "mode": "loop", "sample": "@drone", "freq_hz": 180.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 100.0, "gamma": 0.75},
+                    "udp.total": {"enabled": False, "mode": "loop", "sample": "wind.ogg", "freq_hz": 180.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 100.0, "gamma": 0.75},
                     "dns.total": {"enabled": True, "mode": "one-shot", "sample": "gulls.ogg", "freq_hz": 2100.0, "duration_ms": 60, "gain": 0.30, "ref_pps": 16.0, "gamma": 0.85},
-                    "icmp.total": {"enabled": False, "mode": "one-shot", "sample": "@chirp", "freq_hz": 1600.0, "duration_ms": 120, "gain": 0.0, "ref_pps": 10.0, "gamma": 0.80},
+                    "icmp.total": {"enabled": False, "mode": "one-shot", "sample": "crow.ogg", "freq_hz": 1600.0, "duration_ms": 120, "gain": 0.0, "ref_pps": 10.0, "gamma": 0.80},
                 },
             },
         },
@@ -247,7 +247,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
 def _parse_channel(spec: dict[str, Any]) -> ChannelConfig:
     enabled = bool(spec.get("enabled", True))
     mode = str(spec.get("mode", "one-shot") or "one-shot").lower()
-    sample = str(spec.get("sample", "@chirp") or "@chirp")
+    sample = str(spec.get("sample", "birds.ogg") or "birds.ogg")
 
     # Compat anciens modes
     if mode == "off":

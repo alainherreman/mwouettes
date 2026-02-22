@@ -11,6 +11,7 @@ let captureBackend = null;
 let captureRunning = false;
 let captureError = null;
 let isRecording = false;
+let lastRecordingBlob = null;
 let lang = "fr";
 
 const I18N = {
@@ -58,12 +59,18 @@ const I18N = {
     "title.refresh_sounds": "Rafraîchit la liste des sons depuis le dossier samples/.",
     "hint.imported_stored": "Les fichiers importés sont stockés dans `samples/` et apparaissent dans les listes “son”.",
     "label.listen_sounds": "Écouter les sons :",
+    "label.preview_volume": "Volume test",
+    "tip.preview_volume": "Règle le volume des boutons ▶/↻ dans cette section (sans affecter les sons réseau).",
 
     "section.charts": "Courbes",
     "label.pps": "pps",
     "label.top_channels": "top canaux",
+    "btn.mute_net_off": "Couper sons réseau",
+    "btn.mute_net_on": "Activer sons réseau",
+    "title.mute_net": "Coupe les sons pilotés par le trafic (fond + canaux). Utile pour tester les sons importés; les boutons ▶/↻ restent audibles.",
     "title.toggle_pps": "Affiche/masque la courbe pps.",
     "title.toggle_top": "Affiche/masque le graphe en bâtons (top canaux).",
+    "confirm.env_overwrite": "Le preset “{{name}}” existe déjà. L’écraser ?",
     "chart.pps_title": "pps (total / in / out)",
     "chart.top_title": "Top canaux (pps instantané)",
     "legend.total": "total",
@@ -76,25 +83,31 @@ const I18N = {
     "section.recording": "Enregistrement",
     "btn.record_start": "Enregistrer",
     "btn.record_stop": "Arrêter",
+    "btn.record_save_disk": "sauver sur disque",
     "title.record": "Enregistre la sortie audio du navigateur (ce que tu entends). Clique à nouveau pour arrêter.",
+    "title.record_save_disk": "Sauve l’enregistrement dans recordings/ (côté serveur local) et affiche le chemin.",
     "link.download": "télécharger",
     "tip.recording": "L’enregistrement se fait côté navigateur (WebAudio). Le fichier sera en général en .webm (Opus) selon les capacités du navigateur.",
     "status.recording": "● enregistrement…",
     "status.file_ready": "fichier prêt",
+    "status.saved_to": "sauvé → {{path}}",
+    "err.record_not_ready": "pas d’enregistrement à sauver",
 
     "section.background": "Fond (continu)",
+    "hint.background_explain": "Ambiance en continu (ex: ruisseau/vent/vagues) dont le volume suit l’activité réseau globale. Pour couper l’ambiance, mets “sans fond” ou Volume à 0.",
     "bg.sound": "Son",
     "bg.volume": "Volume",
     "bg.rate": "Débit (paquets/s)",
     "bg.gamma": "Gamma",
     "bg.cutoff": "Cutoff Hz",
     "btn.save_config": "Sauver config",
-    "tip.bg.sound": "Fond sonore joué en continu (boucle) et modulé par l’activité réseau. Ex: ruisseau/vent/vagues. Choisis un fichier dans samples/, un son interne (@noise), ou “sans fond”.",
+    "tip.bg.sound": "Fond sonore joué en continu (boucle) et modulé par l’activité réseau. Ex: ruisseau/vent/vagues. Choisis un fichier dans samples/ ou “sans fond”.",
     "tip.bg.volume": "Volume max du fond (il est ensuite modulé selon le trafic).",
     "tip.bg.rate": "Débit de référence (paquets/s) : quand le trafic ≈ cette valeur, on atteint ~le volume max (selon Gamma).",
     "tip.bg.gamma": "Courbe de réponse: plus petit = monte vite; plus grand = plus progressif (moins sensible aux petites variations).",
     "tip.bg.cutoff": "Filtre passe-bas du bruit: bas = plus ‘grave’/doux; haut = plus ‘brillant’/sifflant.",
 
+    "section.packets": "Paquets",
     "section.channels": "Canaux (par type + direction)",
     "hint.mode_explain_html": "Mode <span class=\"pill\">loop</span> = continu (boucle, volume modulé). Mode <span class=\"pill\">one-shot</span> = discret (événements).",
     "footer.hint_audio": "Astuce: si tu n’entends rien, clique “Démarrer audio” (WebAudio nécessite une interaction utilisateur).",
@@ -116,7 +129,7 @@ const I18N = {
     "tip.th.pps": "pps = paquets par seconde (estimé sur le dernier bloc).",
     "tip.th.hint": "Indication ‘plutôt continu’ vs ‘plutôt discret’. C’est un point de départ: ajuste selon ton oreille et ton trafic.",
     "tip.th.mode": "one-shot = joue des événements discrets. loop = joue un son en boucle dont le volume suit le débit.",
-    "tip.th.sound": "Choisis un fichier dans samples/ OU un son interne (@chirp/@drone/@noise).",
+    "tip.th.sound": "Choisis un fichier dans samples/ ou “silence”.",
     "tip.th.freq": "Fréquence (Hz) utilisée uniquement pour les sons internes (@chirp/@drone).",
     "tip.th.dur": "Durée (ms) utilisée uniquement pour @chirp.",
     "tip.th.volume": "Volume max du canal (ensuite modulé selon le débit et Gamma).",
@@ -138,7 +151,7 @@ const I18N = {
 
     "title.ch.enabled": "Active/désactive ce canal (persisté).",
     "title.ch.mode": "Mode: one-shot (événements) ou loop (continu).",
-    "title.ch.sound": "Choisis un fichier depuis samples/ ou un son interne (@chirp/@drone/@noise).",
+    "title.ch.sound": "Choisis un fichier depuis samples/ ou “silence”.",
     "title.ch.freq": "Fréquence (Hz) utilisée pour les sons internes (@chirp/@drone).",
     "title.ch.dur": "Durée (ms) utilisée uniquement pour @chirp (one-shot).",
     "title.ch.vol": "Volume max du canal (puis modulé selon le débit).",
@@ -174,6 +187,59 @@ const I18N = {
     "builtin.noise": "@noise (interne: bruit)",
     "builtin.chirp": "@chirp (interne: cri)",
     "builtin.drone": "@drone (interne: continu)",
+
+    "mode.one_shot": "discret",
+    "mode.loop": "continu",
+
+    "sample.none": "silence",
+    "sample.river": "rivière",
+    "sample.river_noise": "rivière (bruit)",
+    "sample.river_noise2": "rivière (bruit 2)",
+    "sample.wind": "vent",
+    "sample.wind_forest": "vent (forêt)",
+    "sample.wind_coast": "vent (côte)",
+    "sample.waves": "vagues",
+    "sample.waves_crushing": "vagues (déferlantes)",
+    "sample.waves_rocks": "vagues (rochers)",
+    "sample.birds": "oiseaux",
+    "sample.great_tit": "mésange charbonnière",
+    "sample.starling": "étourneau",
+    "sample.house_sparrow": "moineau domestique",
+    "sample.blackbird": "merle noir",
+    "sample.robin": "rougegorge",
+    "sample.gulls": "mouettes",
+    "sample.drops": "gouttes d’eau",
+    "sample.rain": "pluie",
+    "sample.wood_creak": "craquement de bois",
+    "sample.hull_lapping": "clapot contre la coque",
+    "sample.lightning": "éclair",
+    "sample.thunder": "tonnerre",
+    "sample.storm": "orage (pluie + tonnerre)",
+    "sample.owl": "chouette/hibou",
+    "sample.owl_call": "appel de chouette",
+    "sample.crow": "corneille",
+    "sample.raven": "corbeau",
+    "sample.frog": "grenouille",
+    "sample.cricket": "grillon",
+    "sample.dog": "chien",
+    "sample.nightingale": "rossignol",
+    "sample.meow": "chat",
+    "sample.sheep": "mouton",
+    "sample.cow_moo": "vache",
+    "sample.rooster": "coq",
+    "sample.woodpecker_drum": "pic (tambourinage)",
+    "sample.bike_bell": "sonnette de vélo",
+    "sample.car_horn": "klaxon (voiture)",
+    "sample.foghorn": "corne de brume",
+    "sample.ship_horn_port": "klaxon de bateau (port)",
+    "sample.boat_hull_lap": "coque + clapot (bateau)",
+    "sample.rigging_clank": "haubants contre le mât",
+    "sample.sonar_ping": "sonar",
+    "sample.whale": "baleine",
+    "sample.sputnik_beep": "bip satellite",
+    "sample.reactor": "réacteur",
+    "sample.rocket_launch": "moteur de fusée",
+    "sample.sonic_boom": "bang supersonique",
   },
   en: {
     "page.title": "mwouettes",
@@ -219,12 +285,18 @@ const I18N = {
     "title.refresh_sounds": "Refresh sound list from samples/.",
     "hint.imported_stored": "Imported files are stored in `samples/` and show up in “sound” lists.",
     "label.listen_sounds": "Preview sounds:",
+    "label.preview_volume": "Preview volume",
+    "tip.preview_volume": "Adjusts the ▶/↻ preview volume in this section (does not affect network-driven sounds).",
 
     "section.charts": "Charts",
     "label.pps": "pps",
     "label.top_channels": "top channels",
+    "btn.mute_net_off": "Mute network sounds",
+    "btn.mute_net_on": "Enable network sounds",
+    "title.mute_net": "Mutes traffic-driven sounds (background + channels). Useful to preview imported sounds; ▶/↻ buttons stay audible.",
     "title.toggle_pps": "Show/hide the pps curve.",
     "title.toggle_top": "Show/hide the bar chart (top channels).",
+    "confirm.env_overwrite": "Preset “{{name}}” already exists. Overwrite it?",
     "chart.pps_title": "pps (total / in / out)",
     "chart.top_title": "Top channels (instant pps)",
     "legend.total": "total",
@@ -237,25 +309,31 @@ const I18N = {
     "section.recording": "Recording",
     "btn.record_start": "Record",
     "btn.record_stop": "Stop",
+    "btn.record_save_disk": "save to disk",
     "title.record": "Records the browser audio output (what you hear). Click again to stop.",
+    "title.record_save_disk": "Saves the recording into recordings/ (local server) and shows the path.",
     "link.download": "download",
     "tip.recording": "Recording is done in the browser (WebAudio). The file is usually .webm (Opus), depending on browser support.",
     "status.recording": "● recording…",
     "status.file_ready": "file ready",
+    "status.saved_to": "saved → {{path}}",
+    "err.record_not_ready": "no recording to save",
 
     "section.background": "Background (continuous)",
+    "hint.background_explain": "A continuous ambience (e.g. stream/wind/waves) whose volume follows overall network activity. To silence it, set “no background” or Volume to 0.",
     "bg.sound": "Sound",
     "bg.volume": "Volume",
     "bg.rate": "Rate (packets/s)",
     "bg.gamma": "Gamma",
     "bg.cutoff": "Cutoff Hz",
     "btn.save_config": "Save config",
-    "tip.bg.sound": "Continuous background loop whose volume follows total network activity. Example: stream/wind/waves. Pick a file from samples/, a builtin (@noise), or “no background”.",
+    "tip.bg.sound": "Continuous background loop whose volume follows total network activity. Example: stream/wind/waves. Pick a file from samples/ or “no background”.",
     "tip.bg.volume": "Maximum background volume (then modulated by traffic).",
     "tip.bg.rate": "Reference rate (packets/s): when traffic is around this value, volume reaches ~max (depending on Gamma).",
     "tip.bg.gamma": "Response curve: smaller = rises fast; larger = more progressive (less sensitive to small variations).",
     "tip.bg.cutoff": "Noise low-pass filter: low = darker/softer; high = brighter/hissier.",
 
+    "section.packets": "Packets",
     "section.channels": "Channels (by type + direction)",
     "hint.mode_explain_html": "Mode <span class=\"pill\">loop</span> = continuous (loop, volume follows rate). Mode <span class=\"pill\">one-shot</span> = discrete events.",
     "footer.hint_audio": "Tip: if you hear nothing, click “Start audio” (WebAudio requires a user gesture).",
@@ -277,7 +355,7 @@ const I18N = {
     "tip.th.pps": "pps = packets per second (estimated over the last block).",
     "tip.th.hint": "Suggested “continuous” vs “discrete”. It’s just a starting point: tune based on your traffic.",
     "tip.th.mode": "one-shot plays discrete events. loop plays a continuous sound whose volume follows the rate.",
-    "tip.th.sound": "Pick a file in samples/ OR a builtin sound (@chirp/@drone/@noise).",
+    "tip.th.sound": "Pick a file in samples/ or “silence”.",
     "tip.th.freq": "Frequency (Hz) used only for builtin sounds (@chirp/@drone).",
     "tip.th.dur": "Duration (ms) used only for @chirp.",
     "tip.th.volume": "Maximum channel volume (then modulated by rate and Gamma).",
@@ -299,7 +377,7 @@ const I18N = {
 
     "title.ch.enabled": "Enable/disable this channel (persisted).",
     "title.ch.mode": "Mode: one-shot (events) or loop (continuous).",
-    "title.ch.sound": "Pick a file from samples/ or a builtin (@chirp/@drone/@noise).",
+    "title.ch.sound": "Pick a file from samples/ or “silence”.",
     "title.ch.freq": "Frequency (Hz) used by builtin sounds (@chirp/@drone).",
     "title.ch.dur": "Duration (ms) used only for @chirp (one-shot).",
     "title.ch.vol": "Maximum channel volume (then modulated by rate).",
@@ -335,6 +413,59 @@ const I18N = {
     "builtin.noise": "@noise (builtin: noise)",
     "builtin.chirp": "@chirp (builtin: chirp)",
     "builtin.drone": "@drone (builtin: drone)",
+
+    "mode.one_shot": "one-shot",
+    "mode.loop": "loop",
+
+    "sample.none": "silence",
+    "sample.river": "river",
+    "sample.river_noise": "river noise",
+    "sample.river_noise2": "river noise 2",
+    "sample.wind": "wind",
+    "sample.wind_forest": "wind (forest)",
+    "sample.wind_coast": "wind (coast)",
+    "sample.waves": "waves",
+    "sample.waves_crushing": "waves (crashing)",
+    "sample.waves_rocks": "waves (rocks)",
+    "sample.birds": "birds",
+    "sample.great_tit": "great tit",
+    "sample.starling": "starling",
+    "sample.house_sparrow": "house sparrow",
+    "sample.blackbird": "blackbird",
+    "sample.robin": "robin",
+    "sample.gulls": "gulls",
+    "sample.drops": "water drops",
+    "sample.rain": "rain",
+    "sample.wood_creak": "wood creak",
+    "sample.hull_lapping": "hull lapping",
+    "sample.lightning": "lightning (shock)",
+    "sample.thunder": "thunder",
+    "sample.storm": "storm (rain + thunder)",
+    "sample.owl": "owl",
+    "sample.owl_call": "owl call",
+    "sample.crow": "crow",
+    "sample.raven": "raven",
+    "sample.frog": "frog",
+    "sample.cricket": "cricket",
+    "sample.dog": "dog",
+    "sample.nightingale": "nightingale",
+    "sample.meow": "cat",
+    "sample.sheep": "sheep",
+    "sample.cow_moo": "cow",
+    "sample.rooster": "rooster",
+    "sample.woodpecker_drum": "woodpecker drum",
+    "sample.bike_bell": "bike bell",
+    "sample.car_horn": "car horn",
+    "sample.foghorn": "foghorn",
+    "sample.ship_horn_port": "ship horn (port)",
+    "sample.boat_hull_lap": "boat hull + lapping",
+    "sample.rigging_clank": "rigging clank",
+    "sample.sonar_ping": "sonar ping",
+    "sample.whale": "whale",
+    "sample.sputnik_beep": "satellite beep",
+    "sample.reactor": "reactor",
+    "sample.rocket_launch": "rocket engine",
+    "sample.sonic_boom": "sonic boom",
   },
 };
 
@@ -387,6 +518,8 @@ function applyI18n() {
 
   updateAudioButtonUi();
   refreshRecordingUi();
+  refreshNetMuteButton();
+  syncChartFoldUi();
 }
 
 function loadLang() {
@@ -425,6 +558,8 @@ const uiState = {
   showChartTop: true,
   mutedKeys: new Set(),
   soloKey: null,
+  muteNet: false,
+  previewGain: 0.35,
 };
 
 const COLORS = {
@@ -440,7 +575,52 @@ const COLORS = {
 
 function fmt(n) {
   if (!isFinite(n)) return "—";
-  return n.toFixed(1);
+  return String(Math.round(n));
+}
+
+function sortSamplesForUi(list) {
+  return (list || []).slice().sort((a, b) => {
+    return sampleLabel(a).localeCompare(sampleLabel(b), lang || undefined, { sensitivity: "base" });
+  });
+}
+
+let patchTimer = null;
+let patchPending = null;
+let patchBusy = false;
+
+function applyLocalPatch(patch) {
+  if (!config) return;
+  config = deepMerge(config, patch);
+  blockMs = config.block_ms || blockMs;
+}
+
+function schedulePatch(patch, delayMs = 140) {
+  if (!config) return;
+  applyLocalPatch(patch);
+  patchPending = patchPending ? deepMerge(patchPending, patch) : deepClone(patch);
+  if (patchTimer) clearTimeout(patchTimer);
+  patchTimer = setTimeout(() => { void flushScheduledPatch(); }, delayMs);
+}
+
+async function flushScheduledPatch() {
+  if (patchBusy) return;
+  if (!patchPending) return;
+  patchBusy = true;
+  const patch = patchPending;
+  patchPending = null;
+  try {
+    await patchConfig(patch);
+  } catch (e) {
+    console.warn("patch failed:", e);
+    // keep local state; retry later if more changes happen
+  } finally {
+    patchBusy = false;
+  }
+  if (patchPending) {
+    // Re-apply any edits that happened while the request was in-flight.
+    applyLocalPatch(patchPending);
+    void flushScheduledPatch();
+  }
 }
 
 function updateAudioButtonUi() {
@@ -464,6 +644,9 @@ function loadUiState() {
     uiState.showChartTop = raw.showChartTop !== false;
     uiState.soloKey = raw.soloKey || null;
     uiState.mutedKeys = new Set(Array.isArray(raw.mutedKeys) ? raw.mutedKeys : []);
+    uiState.previewGain = (typeof raw.previewGain === "number" && isFinite(raw.previewGain))
+      ? Math.min(1, Math.max(0, raw.previewGain))
+      : uiState.previewGain;
   } catch {
     // ignore
   }
@@ -476,6 +659,7 @@ function saveUiState() {
       showChartTop: uiState.showChartTop,
       soloKey: uiState.soloKey,
       mutedKeys: Array.from(uiState.mutedKeys),
+      previewGain: uiState.previewGain,
     }));
   } catch {
     // ignore
@@ -486,6 +670,7 @@ async function fetchConfig() {
   const r = await fetch("/api/config");
   config = await r.json();
   blockMs = config.block_ms || 100;
+  await sanitizeConfigSamples();
   renderConfig();
 }
 
@@ -549,6 +734,7 @@ async function envApply(name) {
   if (out.error) throw new Error(out.error);
   config = out;
   blockMs = config.block_ms || blockMs;
+  await sanitizeConfigSamples();
   renderConfig();
 }
 
@@ -562,6 +748,7 @@ async function envSave(name, overwrite) {
   if (out.error) throw new Error(out.error);
   config = out;
   blockMs = config.block_ms || blockMs;
+  await sanitizeConfigSamples();
   renderConfig();
 }
 
@@ -578,15 +765,26 @@ async function uploadSample(file) {
 }
 
 async function patchConfig(patch) {
-  const r = await fetch("/api/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  });
-  const out = await r.json();
-  if (out && out.error) throw new Error(out.error);
-  config = out;
+  if (!config) throw new Error("config not loaded");
+  const prev = deepClone(config);
+  // Apply optimistically so changes are audible immediately.
+  config = deepMerge(config, patch);
   blockMs = config.block_ms || blockMs;
+  try {
+    const r = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const out = await r.json();
+    if (out && out.error) throw new Error(out.error);
+    config = out;
+    blockMs = config.block_ms || blockMs;
+  } catch (e) {
+    config = prev;
+    blockMs = config.block_ms || blockMs;
+    throw e;
+  }
 }
 
 async function saveConfig() {
@@ -649,6 +847,13 @@ function renderConfig() {
   }
   envSelect.value = config.active_environment || "";
   els("envName").value = config.active_environment || "";
+  const envTitle = els("packetsEnvTitle");
+  if (envTitle) {
+    const shown = (config.active_environment && String(config.active_environment).trim())
+      ? String(config.active_environment).trim()
+      : t("opt.current");
+    envTitle.textContent = `: ${shown}`;
+  }
   const envHint = els("envHint");
   if (envHint) {
     const n = Object.keys(envs).length;
@@ -665,13 +870,16 @@ function renderConfig() {
 
   const riverSample = els("riverSample");
   riverSample.innerHTML = "";
-  for (const s of ["@none", ...samples]) {
+  const sortedSamples = sortSamplesForUi(samples);
+  for (const s of ["@none", ...sortedSamples]) {
     const opt = document.createElement("option");
     opt.value = s;
-    opt.textContent = sampleLabel(s);
+    opt.textContent = (s === "@none") ? t("builtin.none") : sampleLabel(s);
     riverSample.appendChild(opt);
   }
-  riverSample.value = river.sample ?? "@noise";
+  riverSample.value = (river.sample && (river.sample === "@none" || sortedSamples.includes(river.sample)))
+    ? river.sample
+    : (sortedSamples[0] ?? "@none");
 
   const tbody = els("channels").querySelector("tbody");
   tbody.innerHTML = "";
@@ -712,10 +920,11 @@ function renderConfig() {
 
     const tdMode = document.createElement("td");
     const sel = document.createElement("select");
+    const MODE_LABEL = { "one-shot": "mode.one_shot", "loop": "mode.loop" };
     for (const m of ["one-shot", "loop"]) {
       const opt = document.createElement("option");
       opt.value = m;
-      opt.textContent = m;
+      opt.textContent = t(MODE_LABEL[m] || m);
       sel.appendChild(opt);
     }
     sel.value = (ch.mode || "one-shot");
@@ -728,94 +937,111 @@ function renderConfig() {
 
     const tdSample = document.createElement("td");
     const selS = document.createElement("select");
-    for (const s of samples) {
+    for (const s of ["@none", ...sortedSamples]) {
       const opt = document.createElement("option");
       opt.value = s;
       opt.textContent = sampleLabel(s);
       selS.appendChild(opt);
     }
-    selS.value = ch.sample ?? "@chirp";
+    selS.value = (ch.sample && (ch.sample === "@none" || sortedSamples.includes(ch.sample)))
+      ? ch.sample
+      : (sortedSamples[0] ?? "@none");
     selS.title = t("title.ch.sound");
-    const setSynthControls = () => {
-      const builtin = isBuiltin(selS.value);
-      inFreq.disabled = !builtin || selS.value === "@noise";
-      inDur.disabled = !builtin || selS.value !== "@chirp";
-    };
     selS.addEventListener("change", async () => {
       await patchConfig({ channels: { [key]: { sample: selS.value } } });
-      setSynthControls();
     });
     tdSample.appendChild(selS);
     tr.appendChild(tdSample);
 
-    const tdFreq = document.createElement("td");
-    const inFreq = document.createElement("input");
-    inFreq.type = "number";
-    inFreq.min = "40";
-    inFreq.max = "8000";
-    inFreq.step = "1";
-    inFreq.value = ch.freq_hz ?? 1000;
-    inFreq.title = t("title.ch.freq");
-    inFreq.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { freq_hz: parseFloat(inFreq.value) } } });
-    });
-    tdFreq.appendChild(inFreq);
-    tr.appendChild(tdFreq);
-
-    const tdDur = document.createElement("td");
-    const inDur = document.createElement("input");
-    inDur.type = "number";
-    inDur.min = "10";
-    inDur.max = "600";
-    inDur.step = "1";
-    inDur.value = ch.duration_ms ?? 80;
-    inDur.title = t("title.ch.dur");
-    inDur.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { duration_ms: parseInt(inDur.value, 10) } } });
-    });
-    tdDur.appendChild(inDur);
-    tr.appendChild(tdDur);
-
     const tdGain = document.createElement("td");
+    const gainWrap = document.createElement("div");
+    gainWrap.className = "sliderCell";
     const inGain = document.createElement("input");
-    inGain.type = "number";
+    inGain.type = "range";
     inGain.min = "0";
     inGain.max = "1.0";
     inGain.step = "0.005";
     inGain.value = ch.gain ?? 0.12;
     inGain.title = t("title.ch.vol");
-    inGain.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { gain: parseFloat(inGain.value) } } });
+    const gainVal = document.createElement("span");
+    gainVal.className = "sliderVal num";
+    const setGainVal = () => { gainVal.textContent = (+inGain.value).toFixed(2); };
+    setGainVal();
+    inGain.addEventListener("input", () => {
+      setGainVal();
+      schedulePatch({ channels: { [key]: { gain: parseFloat(inGain.value) } } });
     });
-    tdGain.appendChild(inGain);
+    inGain.addEventListener("change", () => {
+      schedulePatch({ channels: { [key]: { gain: parseFloat(inGain.value) } } }, 0);
+    });
+    gainWrap.appendChild(inGain);
+    gainWrap.appendChild(gainVal);
+    tdGain.appendChild(gainWrap);
     tr.appendChild(tdGain);
 
     const tdRef = document.createElement("td");
+    const refWrap = document.createElement("div");
+    refWrap.className = "sliderCell";
     const inRef = document.createElement("input");
-    inRef.type = "number";
-    inRef.min = "1";
-    inRef.max = "50000";
+    inRef.type = "range";
+    inRef.min = "0";
+    inRef.max = "1000";
     inRef.step = "1";
-    inRef.value = ch.ref_pps ?? 50;
+    const REF_MIN = 1;
+    const REF_MAX = 50000;
+    const refFromPos = (pos) => {
+      const p = Math.max(0, Math.min(1000, pos)) / 1000.0;
+      const v = REF_MIN * Math.pow(REF_MAX / REF_MIN, p);
+      return Math.max(1, Math.round(v));
+    };
+    const posFromRef = (ref) => {
+      const v = Math.max(REF_MIN, Math.min(REF_MAX, ref || REF_MIN));
+      const p = Math.log(v / REF_MIN) / Math.log(REF_MAX / REF_MIN);
+      return Math.max(0, Math.min(1000, Math.round(p * 1000)));
+    };
+    const initialRef = Math.max(1, Math.round(ch.ref_pps ?? 50));
+    inRef.value = String(posFromRef(initialRef));
     inRef.title = t("title.ch.ref");
-    inRef.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { ref_pps: parseFloat(inRef.value) } } });
+    const refVal = document.createElement("span");
+    refVal.className = "sliderVal num";
+    const setRefVal = () => { refVal.textContent = String(refFromPos(parseInt(inRef.value, 10))); };
+    setRefVal();
+    inRef.addEventListener("input", () => {
+      setRefVal();
+      schedulePatch({ channels: { [key]: { ref_pps: refFromPos(parseInt(inRef.value, 10)) } } });
     });
-    tdRef.appendChild(inRef);
+    inRef.addEventListener("change", () => {
+      schedulePatch({ channels: { [key]: { ref_pps: refFromPos(parseInt(inRef.value, 10)) } } }, 0);
+    });
+    refWrap.appendChild(inRef);
+    refWrap.appendChild(refVal);
+    tdRef.appendChild(refWrap);
     tr.appendChild(tdRef);
 
     const tdGamma = document.createElement("td");
+    const gammaWrap = document.createElement("div");
+    gammaWrap.className = "sliderCell";
     const inGamma = document.createElement("input");
-    inGamma.type = "number";
+    inGamma.type = "range";
     inGamma.min = "0.1";
     inGamma.max = "3";
     inGamma.step = "0.05";
     inGamma.value = ch.gamma ?? 0.75;
     inGamma.title = t("title.ch.gamma");
-    inGamma.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } });
+    const gammaVal = document.createElement("span");
+    gammaVal.className = "sliderVal num";
+    const setGammaVal = () => { gammaVal.textContent = (+inGamma.value).toFixed(2); };
+    setGammaVal();
+    inGamma.addEventListener("input", () => {
+      setGammaVal();
+      schedulePatch({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } });
     });
-    tdGamma.appendChild(inGamma);
+    inGamma.addEventListener("change", () => {
+      schedulePatch({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } }, 0);
+    });
+    gammaWrap.appendChild(inGamma);
+    gammaWrap.appendChild(gammaVal);
+    tdGamma.appendChild(gammaWrap);
     tr.appendChild(tdGamma);
 
     const tdTest = document.createElement("td");
@@ -858,9 +1084,6 @@ function renderConfig() {
     tdTest.appendChild(b);
     tr.appendChild(tdTest);
 
-    // init enable/disable synth-only controls
-    setSynthControls();
-
     tbody.appendChild(tr);
   }
 }
@@ -869,12 +1092,136 @@ function isBuiltin(name) {
   return typeof name === "string" && name.startsWith("@");
 }
 
+const SAMPLE_LABEL_KEYS = {
+  "river.ogg": "sample.river",
+  "river_noise.ogg": "sample.river_noise",
+  "river_noise2.ogg": "sample.river_noise2",
+  "wind.ogg": "sample.wind",
+  "wind_forest.ogg": "sample.wind_forest",
+  "wind_coast.ogg": "sample.wind_coast",
+  "waves.ogg": "sample.waves",
+  "waves_crushing.ogg": "sample.waves_crushing",
+  "waves_rocks.ogg": "sample.waves_rocks",
+  "birds.ogg": "sample.birds",
+  "great_tit.ogg": "sample.great_tit",
+  "starling.ogg": "sample.starling",
+  "house_sparrow.ogg": "sample.house_sparrow",
+  "blackbird.ogg": "sample.blackbird",
+  "robin.ogg": "sample.robin",
+  "gulls.ogg": "sample.gulls",
+  "drops.ogg": "sample.drops",
+  "rain.ogg": "sample.rain",
+  "wood_creak.ogg": "sample.wood_creak",
+  "hull_lapping.ogg": "sample.hull_lapping",
+  "lightning.ogg": "sample.lightning",
+  "thunder.ogg": "sample.thunder",
+  "storm.ogg": "sample.storm",
+  "owl.ogg": "sample.owl",
+  "owl_call.ogg": "sample.owl_call",
+  "crow.ogg": "sample.crow",
+  "raven.ogg": "sample.raven",
+  "frog.oga": "sample.frog",
+  "cricket.ogg": "sample.cricket",
+  "dog.ogg": "sample.dog",
+  "nightingale.ogg": "sample.nightingale",
+  "meow.ogg": "sample.meow",
+  "sheep.ogg": "sample.sheep",
+  "cow_moo.ogg": "sample.cow_moo",
+  "rooster.ogg": "sample.rooster",
+  "woodpecker_drum.ogg": "sample.woodpecker_drum",
+  "bike_bell.ogg": "sample.bike_bell",
+  "car_horn.wav": "sample.car_horn",
+  "foghorn.ogg": "sample.foghorn",
+  "ship_horn_port.ogg": "sample.ship_horn_port",
+  "boat_hull_lap.ogg": "sample.boat_hull_lap",
+  "rigging_clank.ogg": "sample.rigging_clank",
+  "sonar_ping.ogg": "sample.sonar_ping",
+  "whale.ogg": "sample.whale",
+  "sputnik_beep.ogg": "sample.sputnik_beep",
+  "reactor.ogg": "sample.reactor",
+  "rocket_launch.ogg": "sample.rocket_launch",
+  "sonic_boom.ogg": "sample.sonic_boom",
+};
+
+function _prettyFileLabel(name) {
+  const s = String(name || "");
+  const base = s.replace(/\.(wav|mp3|ogg|oga)$/i, "");
+  return base.replace(/[_-]+/g, " ").trim() || s;
+}
+
+function _filesSamples() {
+  // Server returns only files, but keep it robust.
+  return (samples || []).filter((s) => !!s && !isBuiltin(s));
+}
+
+function _pickPreferredSample(preferList) {
+  const files = _filesSamples();
+  for (const n of preferList) {
+    if (files.includes(n)) return n;
+  }
+  return files[0] || "";
+}
+
+function _fallbackSampleForMode(mode) {
+  const m = String(mode || "one-shot").toLowerCase();
+  if (m === "loop") return _pickPreferredSample(["wind.ogg", "waves.ogg", "river.ogg", "birds.ogg"]);
+  return _pickPreferredSample(["birds.ogg", "gulls.ogg", "crow.ogg", "raven.ogg", "owl.ogg", "cricket.ogg", "frog.oga"]);
+}
+
+async function sanitizeConfigSamples() {
+  if (!config) return;
+  const files = _filesSamples();
+  if (!files.length) return;
+
+  const patch = {};
+  let changed = false;
+
+  // Background
+  const river = config.river || {};
+  const riverSample = river.sample || "";
+  if (riverSample && riverSample !== "@none" && (isBuiltin(riverSample) || !files.includes(riverSample))) {
+    const picked = _pickPreferredSample(["river.ogg", "waves.ogg", "wind.ogg", files[0]]);
+    if (picked) {
+      patch.river = { sample: picked };
+      changed = true;
+    }
+  }
+
+  // Channels
+  const chs = config.channels || {};
+  const chPatch = {};
+  for (const [key, ch] of Object.entries(chs)) {
+    const sample = (ch && ch.sample) ? String(ch.sample) : "";
+    if (!sample) continue;
+    if (sample === "@none") continue;
+    const missing = !isBuiltin(sample) && !files.includes(sample);
+    if (isBuiltin(sample) || missing) {
+      const picked = _fallbackSampleForMode(ch && ch.mode);
+      if (picked) {
+        chPatch[key] = { sample: picked };
+        changed = true;
+      }
+    }
+  }
+  if (Object.keys(chPatch).length) patch.channels = chPatch;
+
+  if (changed) {
+    try {
+      await patchConfig(patch);
+    } catch {
+      // ignore: best-effort sanitation
+    }
+  }
+}
+
 function sampleLabel(name) {
-  if (name === "@none") return t("builtin.none");
+  if (name === "@none") return t("sample.none");
   if (name === "@noise") return t("builtin.noise");
   if (name === "@chirp") return t("builtin.chirp");
   if (name === "@drone") return t("builtin.drone");
-  return name;
+  const k = SAMPLE_LABEL_KEYS[String(name)] || null;
+  if (k) return t(k);
+  return _prettyFileLabel(name);
 }
 
 function keyInfo(key) {
@@ -980,6 +1327,32 @@ function gainFromPps(pps, ref, gamma, baseGain) {
   return baseGain * y;
 }
 
+function deepClone(obj) {
+  try {
+    if (window.structuredClone) return window.structuredClone(obj);
+  } catch {}
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function deepMerge(base, patch) {
+  const out = Array.isArray(base) ? base.slice() : { ...(base || {}) };
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      out[k] &&
+      typeof out[k] === "object" &&
+      !Array.isArray(out[k])
+    ) {
+      out[k] = deepMerge(out[k], v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 class WebAudioEngine {
   constructor() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1019,10 +1392,12 @@ class WebAudioEngine {
     this.loopSamples = new Map(); // key -> {src, gain, name}
     this.riverLoop = null; // {src, name} | null
     this.muted = false;
+    this.muteNet = false;
 
     this.mutedKeys = new Set();
     this.soloKey = null;
-    this.previewLoop = null; // {src, name} | null
+    this.previewLoop = null; // {src, gain, name} | null
+    this.previewGain = 0.35; // 0..1 (UI slider)
   }
 
   _pickMime() {
@@ -1153,6 +1528,7 @@ class WebAudioEngine {
     const ch = (config.channels || {})[key] || {};
     const level = Math.min(0.25, ch.gain ?? 0.12);
     const sample = ch.sample || "@chirp";
+    if (sample === "@none") return;
     if (sample === "@drone") {
       const node = this.ensureDrone(key, ch.freq_hz ?? 220);
       node.osc.frequency.setTargetAtTime(ch.freq_hz ?? 220, this.ctx.currentTime, 0.02);
@@ -1178,11 +1554,23 @@ class WebAudioEngine {
     const river = config.river || {};
     const total = (counts["net.total"] ?? ((counts["in.total"] || 0) + (counts["out.total"] || 0)));
     const totalPps = total / (blockMs / 1000.0);
-    const riverLevel = gainFromPps(totalPps, river.ref_pps ?? 250, river.gamma ?? 0.65, river.gain ?? 0.18);
+    const riverLevel = this.muteNet ? 0.0 : gainFromPps(totalPps, river.ref_pps ?? 250, river.gamma ?? 0.65, river.gain ?? 0.18);
     this.setRiver(riverLevel, river.cutoff_hz ?? 900);
     this._setRiverSound(river.sample || "@noise");
 
     const activeLoopKeys = new Set();
+
+    if (this.muteNet) {
+      // Fade down anything that might still be running.
+      for (const [, node] of this.loopSamples.entries()) node.gain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.15);
+      for (const [k, node] of this.drones.entries()) {
+        if (!k.startsWith("oneshot.")) node.gain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.15);
+      }
+      for (const [k, node] of this.noises.entries()) {
+        if (!k.startsWith("oneshot.")) node.gain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.20);
+      }
+      return;
+    }
 
     const channels = config.channels || {};
     for (const [key, ch] of Object.entries(channels)) {
@@ -1192,6 +1580,7 @@ class WebAudioEngine {
 
       const mode = (ch.mode || "one-shot");
       const sample = (ch.sample || "@chirp");
+      if (sample === "@none") continue;
       const pps = ppsFromCounts(key, counts, blockMs);
       const level = gainFromPps(pps, ch.ref_pps ?? 50, ch.gamma ?? 0.75, ch.gain ?? 0.12);
       if (mode === "loop") {
@@ -1246,6 +1635,7 @@ class WebAudioEngine {
   setOverrides(state) {
     this.mutedKeys = new Set(state?.mutedKeys ? Array.from(state.mutedKeys) : []);
     this.soloKey = state?.soloKey || null;
+    this.muteNet = !!state?.muteNet;
   }
 
   async _loadBuffer(name) {
@@ -1356,7 +1746,7 @@ class WebAudioEngine {
   }
 
   async previewOnce(name) {
-    await this._playSample(name, 0.25);
+    await this._playSample(name, 0.6 * this.previewGain);
   }
 
   async togglePreviewLoop(name) {
@@ -1375,14 +1765,23 @@ class WebAudioEngine {
       src.buffer = buf;
       src.loop = true;
       const g = this.ctx.createGain();
-      g.gain.value = 0.18;
+      g.gain.value = 0.45 * this.previewGain;
       src.connect(g);
       g.connect(this.master);
       src.start();
-      this.previewLoop = { src, name };
+      this.previewLoop = { src, gain: g, name };
       return true;
     } catch {
       return false;
+    }
+  }
+
+  setPreviewGain(v) {
+    const vv = Math.min(1, Math.max(0, Number(v)));
+    if (!isFinite(vv)) return;
+    this.previewGain = vv;
+    if (this.previewLoop && this.previewLoop.gain) {
+      this.previewLoop.gain.gain.setTargetAtTime(0.45 * this.previewGain, this.ctx.currentTime, 0.04);
     }
   }
 }
@@ -1486,10 +1885,7 @@ function drawLine(ctx, arr, w, h, color, maxY) {
 }
 
 function drawCharts(counts, blockMs) {
-  const boxPps = els("chartBoxPps");
-  const boxTop = els("chartBoxTop");
-  if (boxPps) boxPps.style.display = uiState.showChartPps ? "" : "none";
-  if (boxTop) boxTop.style.display = uiState.showChartTop ? "" : "none";
+  syncChartFoldUi();
 
   const dirSum = (counts["in.total"] || 0) + (counts["out.total"] || 0);
   const dirAvailable = dirSum > 0;
@@ -1589,6 +1985,7 @@ function initAudioButtons() {
       audio = new WebAudioEngine();
       await audio.ctx.resume();
       audio.setOverrides(uiState);
+      audio.setPreviewGain?.(uiState.previewGain);
       updateAudioButtonUi();
       refreshRecordingUi();
       return;
@@ -1653,6 +2050,7 @@ function initEnvironmentControls() {
     setStatus(t("msg.loading"), true);
     try {
       await envApply(name);
+      saveLastEnvironment(name);
       setStatus(t("msg.loaded"), true);
     } catch (e) {
       setStatus(t("msg.error_prefix", { msg: e.message }), false);
@@ -1668,11 +2066,24 @@ function initEnvironmentControls() {
     const name = (els("envName").value || "").trim();
     // UX: si on sauve sous le nom du preset actif, on overwrite automatiquement.
     const activeName = (config && (config.active_environment || "")) ? String(config.active_environment) : "";
-    const overwrite = (name && activeName && name === activeName) ? true : els("envOverwrite").checked;
+    const overwrite = (name && activeName && name === activeName) ? true : false;
     els("envStatus").textContent = t("msg.loading");
     try {
       if (!name) throw new Error(t("err.name_required"));
-      await envSave(name, overwrite);
+      try {
+        await envSave(name, overwrite);
+      } catch (e) {
+        const msg = String(e?.message || e || "");
+        const exists = msg.toLowerCase().includes("already exists") || msg.toLowerCase().includes("existe déjà") || msg.toLowerCase().includes("already exists:");
+        if (!overwrite && exists) {
+          const ok = confirm(t("confirm.env_overwrite", { name }));
+          if (!ok) throw e;
+          await envSave(name, true);
+        } else {
+          throw e;
+        }
+      }
+      saveLastEnvironment(name);
       els("envStatus").textContent = t("msg.saved");
       els("envStatus").className = "muted ok";
     } catch (e) {
@@ -1717,6 +2128,63 @@ function initSamplesRefresh() {
   });
 }
 
+function initSamplesPreviewGain() {
+  const r = els("samplesPreviewGain");
+  if (!r) return;
+  r.value = String(uiState.previewGain ?? 0.35);
+  const apply = () => {
+    const v = parseFloat(r.value);
+    uiState.previewGain = (isFinite(v) ? Math.min(1, Math.max(0, v)) : (uiState.previewGain ?? 0.35));
+    saveUiState();
+    if (audio && audio.setPreviewGain) audio.setPreviewGain(uiState.previewGain);
+  };
+  r.addEventListener("input", apply);
+  r.addEventListener("change", apply);
+  apply();
+}
+
+function saveLastEnvironment(name) {
+  try { localStorage.setItem("flowSonify.lastEnv", String(name || "")); } catch {}
+}
+
+function loadLastEnvironment() {
+  try {
+    const v = String(localStorage.getItem("flowSonify.lastEnv") || "").trim();
+    return v || null;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureDefaultEnvironment() {
+  if (!config) return;
+  const envs = config.environments || {};
+  const names = Object.keys(envs || {});
+  if (!names.length) return;
+
+  const active = String(config.active_environment || "").trim();
+  if (active && names.includes(active)) {
+    saveLastEnvironment(active);
+    return;
+  }
+
+  const last = loadLastEnvironment();
+  if (last && names.includes(last)) {
+    try {
+      await envApply(last);
+      saveLastEnvironment(last);
+      return;
+    } catch {}
+  }
+
+  if (names.includes("sous-bois")) {
+    try {
+      await envApply("sous-bois");
+      saveLastEnvironment("sous-bois");
+    } catch {}
+  }
+}
+
 function renderSamplesList() {
   const root = els("samplesList");
   if (!root) return;
@@ -1734,14 +2202,14 @@ function renderSamplesList() {
     return;
   }
 
-  const files = samples.filter((s) => !isBuiltin(s));
+  const files = sortSamplesForUi(samples.filter((s) => !isBuiltin(s)));
   for (const name of files) {
     const chip = document.createElement("div");
     chip.className = "chip";
 
     const label = document.createElement("span");
     label.className = "name";
-    label.textContent = name;
+    label.textContent = sampleLabel(name);
     label.title = name;
     chip.appendChild(label);
 
@@ -1777,20 +2245,61 @@ function renderSamplesList() {
   root.appendChild(wrap);
 }
 
-function initChartToggles() {
-  const cPps = els("toggleChartPps");
-  const cTop = els("toggleChartTop");
-  cPps.checked = !!uiState.showChartPps;
-  cTop.checked = !!uiState.showChartTop;
+function refreshNetMuteButton() {
+  const b = els("toggleMuteNetBtn");
+  if (!b) return;
+  const muted = !!uiState.muteNet;
+  b.textContent = muted ? t("btn.mute_net_on") : t("btn.mute_net_off");
+  b.classList.remove("primary", "danger");
+  if (muted) b.classList.add("primary");
+  else b.classList.add("danger");
+}
 
-  const on = () => {
-    uiState.showChartPps = !!cPps.checked;
-    uiState.showChartTop = !!cTop.checked;
+function syncChartFoldUi() {
+  const bPps = els("foldPps");
+  const bTop = els("foldTop");
+  const bodyPps = els("chartBodyPps");
+  const bodyTop = els("chartBodyTop");
+
+  if (bPps) bPps.setAttribute("aria-expanded", uiState.showChartPps ? "true" : "false");
+  if (bTop) bTop.setAttribute("aria-expanded", uiState.showChartTop ? "true" : "false");
+  if (bodyPps) bodyPps.style.display = uiState.showChartPps ? "" : "none";
+  if (bodyTop) bodyTop.style.display = uiState.showChartTop ? "" : "none";
+}
+
+function initChartToggles() {
+  const bPps = els("foldPps");
+  const bTop = els("foldTop");
+  syncChartFoldUi();
+
+  if (bPps) {
+    bPps.addEventListener("click", () => {
+      uiState.showChartPps = !uiState.showChartPps;
+      saveUiState();
+      syncChartFoldUi();
+      drawCharts(lastCounts, blockMs);
+    });
+  }
+  if (bTop) {
+    bTop.addEventListener("click", () => {
+      uiState.showChartTop = !uiState.showChartTop;
+      saveUiState();
+      syncChartFoldUi();
+      drawCharts(lastCounts, blockMs);
+    });
+  }
+}
+
+function initNetMuteToggle() {
+  const b = els("toggleMuteNetBtn");
+  if (!b) return;
+  refreshNetMuteButton();
+  b.addEventListener("click", () => {
+    uiState.muteNet = !uiState.muteNet;
     saveUiState();
-    drawCharts(lastCounts, blockMs);
-  };
-  cPps.addEventListener("change", on);
-  cTop.addEventListener("change", on);
+    refreshNetMuteButton();
+    if (audio) audio.setOverrides(uiState);
+  });
 }
 
 function initInterfaceControls() {
@@ -1857,15 +2366,27 @@ function fmtTs() {
 function showRecordingBlob(blob) {
   const dl = els("recordDownload");
   const status = els("recordStatus");
+  const saveBtn = els("recordSaveDisk");
   if (!dl || !status) return;
   if (!blob || !blob.size) return;
+  lastRecordingBlob = blob;
   const url = URL.createObjectURL(blob);
   const ext = (blob.type || "").includes("ogg") ? "ogg" : "webm";
   dl.href = url;
   dl.download = `mwouettes-${fmtTs()}.${ext}`;
   dl.textContent = t("msg.download_with_size", { mb: (blob.size / 1024 / 1024).toFixed(1) });
   dl.style.display = "inline";
+  if (saveBtn) saveBtn.style.display = "inline-flex";
   status.textContent = t("status.file_ready");
+}
+
+async function saveRecordingToDisk(blob, filename) {
+  const fd = new FormData();
+  fd.append("file", blob, filename);
+  const r = await fetch("/api/recordings/save", { method: "POST", body: fd });
+  const out = await r.json();
+  if (out.error) throw new Error(out.error);
+  return out.saved;
 }
 
 function refreshRecordingUi() {
@@ -1884,6 +2405,7 @@ function attachRecordingControls() {
   const btn = els("recordBtn");
   const status = els("recordStatus");
   const dl = els("recordDownload");
+  const saveBtn = els("recordSaveDisk");
   if (!btn || !status || !dl) return;
 
   const setUi = () => {
@@ -1900,6 +2422,8 @@ function attachRecordingControls() {
     dl.style.display = "none";
     dl.removeAttribute("href");
     dl.removeAttribute("download");
+    lastRecordingBlob = null;
+    if (saveBtn) saveBtn.style.display = "none";
 
     if (!isRecording) {
       try {
@@ -1917,6 +2441,22 @@ function attachRecordingControls() {
     const blob = await audio.stopRecording();
     showRecordingBlob(blob);
   });
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      try {
+        if (!lastRecordingBlob) throw new Error(t("err.record_not_ready"));
+        const dlName = dl.getAttribute("download") || `mwouettes-${fmtTs()}.webm`;
+        status.textContent = t("msg.loading");
+        const saved = await saveRecordingToDisk(lastRecordingBlob, dlName);
+        status.textContent = t("status.saved_to", { path: saved });
+        status.className = "muted ok";
+      } catch (e) {
+        status.textContent = t("msg.error_prefix", { msg: e?.message || e });
+        status.className = "muted bad";
+      }
+    });
+  }
 }
 
 async function main() {
@@ -1928,6 +2468,7 @@ async function main() {
   await fetchInterfaceStatus();
   await fetchSamples();
   await fetchConfig();
+  await ensureDefaultEnvironment();
   attachRiverControls();
   initAudioButtons();
   attachRecordingControls();
@@ -1935,8 +2476,10 @@ async function main() {
   initEnvironmentControls();
   initUpload();
   initSamplesRefresh();
+  initSamplesPreviewGain();
   renderSamplesList();
   initChartToggles();
+  initNetMuteToggle();
   initInterfaceControls();
   startEvents();
 }

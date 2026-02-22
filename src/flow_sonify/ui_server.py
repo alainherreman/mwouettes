@@ -213,6 +213,10 @@ def _environments_dir() -> Path:
     return (_BASE_DIR / "environments").resolve()
 
 
+def _recordings_dir() -> Path:
+    return (_BASE_DIR / "recordings").resolve()
+
+
 def _safe_env_file_stem(name: str) -> str:
     stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", (name or "").strip()).strip("_")
     return stem or "environment"
@@ -286,11 +290,9 @@ def _merge_env_dir_into_config(cfg: AppConfig) -> AppConfig:
 
 def list_samples() -> list[str]:
     d = _samples_dir()
-    if not d.exists():
-        return ["@noise", "@chirp", "@drone"]
-    if not d.is_dir():
-        return ["@noise", "@chirp", "@drone"]
-    out: list[str] = ["@noise", "@chirp", "@drone"]
+    if not d.exists() or not d.is_dir():
+        return []
+    out: list[str] = []
     for p in d.iterdir():
         if not p.is_file():
             continue
@@ -480,6 +482,14 @@ class UiHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(e)})
             return
 
+        if self.path == "/api/recordings/save":
+            try:
+                saved = self._handle_save_recording()
+                self._json(200, {"saved": saved})
+            except Exception as e:
+                self._json(400, {"error": str(e)})
+            return
+
         if self.path == "/api/save":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -538,6 +548,53 @@ class UiHandler(BaseHTTPRequestHandler):
         out.write_bytes(data)
         _maybe_chown_to_sudo_user(out)
         return out.name
+
+    def _handle_save_recording(self) -> str:
+        ctype, pdict = cgi.parse_header(self.headers.get("Content-Type", ""))
+        if ctype != "multipart/form-data":
+            raise ValueError("expected multipart/form-data")
+
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": self.headers.get("Content-Type", "")},
+        )
+
+        if "file" not in form:
+            raise ValueError("missing field 'file'")
+        field = form["file"]
+        if not getattr(field, "filename", None):
+            raise ValueError("missing filename")
+
+        filename = Path(str(field.filename)).name
+        if not filename:
+            raise ValueError("invalid filename")
+
+        ext = Path(filename).suffix.lower()
+        if ext not in (".webm", ".ogg", ".wav"):
+            raise ValueError("unsupported file type (webm/ogg/wav)")
+
+        target_dir = _recordings_dir()
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        stem = Path(filename).stem
+        safe_stem = "".join(ch for ch in stem if ch.isalnum() or ch in ("-", "_", " "))
+        safe_stem = safe_stem.strip().replace(" ", "_") or "mwouettes-recording"
+        base = safe_stem + ext
+        out = target_dir / base
+        i = 2
+        while out.exists():
+            out = target_dir / f"{safe_stem}_{i}{ext}"
+            i += 1
+
+        data = field.file.read()
+        out.write_bytes(data)
+        _maybe_chown_to_sudo_user(out)
+        # return a nice relative-ish path for display
+        try:
+            return str(out.relative_to(_BASE_DIR))
+        except Exception:
+            return str(out)
 
     def _handle_sse(self) -> None:
         self.send_response(200)

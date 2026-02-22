@@ -399,6 +399,9 @@ class AudioEngine:
 
             mode = (spec.mode or "one-shot").lower()
             sample = (spec.sample or "@chirp").strip()
+            if sample == "@none":
+                debug_levels[key] = 0.0
+                continue
 
             ema = self._emas.setdefault(key, Ema())
             rate = (count / self.block_s) if count > 0 else 0.0

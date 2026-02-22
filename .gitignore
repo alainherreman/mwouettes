@@ -20,3 +20,9 @@ configs/*.json
 environments/*.json
 !environments/sous-bois.json
 !environments/bord-de-mer.json
+!environments/sous-marin.json
+!environments/espace.json
+
+# Browser recordings (saved via UI)
+recordings/*
+!recordings/.gitkeep

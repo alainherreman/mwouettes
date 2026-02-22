@@ -5,9 +5,9 @@
       "enabled": false,
       "freq_hz": 2100.0,
       "gain": 0.0,
-      "gamma": 0.85,
+      "gamma": 0.75,
       "mode": "one-shot",
-      "ref_pps": 20.0,
+      "ref_pps": 25.0,
       "sample": "birds.ogg"
     },
     "icmp.total": {
@@ -21,44 +21,44 @@
       "sample": "crow.ogg"
     },
     "in.dns": {
-      "duration_ms": 60,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 2100.0,
-      "gain": 0.39,
-      "gamma": 0.75,
+      "freq_hz": 1000.0,
+      "gain": 0.2,
+      "gamma": 0.85,
       "mode": "one-shot",
-      "ref_pps": 25.0,
-      "sample": "robin_full.ogg"
+      "ref_pps": 22.0,
+      "sample": "sputnik_beep.ogg"
     },
     "in.icmp": {
-      "duration_ms": 140,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 1700.0,
-      "gain": 0.375,
+      "freq_hz": 1000.0,
+      "gain": 0.0,
       "gamma": 0.8,
       "mode": "one-shot",
       "ref_pps": 10.0,
-      "sample": "dog.ogg"
+      "sample": "birds.ogg"
     },
     "in.tcp": {
-      "duration_ms": 70,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 1250.0,
-      "gain": 0.185,
+      "freq_hz": 1000.0,
+      "gain": 0.16,
       "gamma": 0.7,
       "mode": "one-shot",
       "ref_pps": 60.0,
-      "sample": "wind.ogg"
+      "sample": "reactor.ogg"
     },
     "in.udp": {
-      "duration_ms": 90,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 750.0,
-      "gain": 0.355,
+      "freq_hz": 1000.0,
+      "gain": 0.0,
       "gamma": 0.75,
       "mode": "one-shot",
       "ref_pps": 50.0,
-      "sample": "river.ogg"
+      "sample": "birds.ogg"
     },
     "net.total": {
       "duration_ms": 0,
@@ -71,44 +71,44 @@
       "sample": "river.ogg"
     },
     "out.dns": {
-      "duration_ms": 60,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 1950.0,
-      "gain": 0.36,
-      "gamma": 0.75,
+      "freq_hz": 1000.0,
+      "gain": 0.18,
+      "gamma": 0.85,
       "mode": "one-shot",
-      "ref_pps": 25.0,
-      "sample": "robin_full.ogg"
+      "ref_pps": 22.0,
+      "sample": "sputnik_beep.ogg"
     },
     "out.icmp": {
-      "duration_ms": 140,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 1500.0,
-      "gain": 0.39,
+      "freq_hz": 1000.0,
+      "gain": 0.1,
       "gamma": 0.8,
       "mode": "one-shot",
       "ref_pps": 10.0,
-      "sample": "dog.ogg"
+      "sample": "birds.ogg"
     },
     "out.tcp": {
-      "duration_ms": 70,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 1050.0,
-      "gain": 0.2,
+      "freq_hz": 1000.0,
+      "gain": 0.14,
       "gamma": 0.7,
       "mode": "one-shot",
       "ref_pps": 60.0,
-      "sample": "wind.ogg"
+      "sample": "reactor.ogg"
     },
     "out.udp": {
-      "duration_ms": 90,
+      "duration_ms": 80,
       "enabled": true,
-      "freq_hz": 650.0,
-      "gain": 0.42,
+      "freq_hz": 1000.0,
+      "gain": 0.0,
       "gamma": 0.75,
       "mode": "one-shot",
       "ref_pps": 50.0,
-      "sample": "river.ogg"
+      "sample": "birds.ogg"
     },
     "tcp.total": {
       "duration_ms": 0,
@@ -117,7 +117,7 @@
       "gain": 0.0,
       "gamma": 0.7,
       "mode": "loop",
-      "ref_pps": 140.0,
+      "ref_pps": 120.0,
       "sample": "wind.ogg"
     },
     "udp.total": {
@@ -128,15 +128,15 @@
       "gamma": 0.75,
       "mode": "loop",
       "ref_pps": 100.0,
-      "sample": "river.ogg"
+      "sample": "waves.ogg"
     }
   },
-  "name": "sous-bois",
+  "name": "espace",
   "river": {
     "cutoff_hz": 900.0,
     "gain": 0.0,
     "gamma": 0.65,
     "ref_pps": 250.0,
-    "sample": "river.ogg"
+    "sample": "@none"
   }
 }

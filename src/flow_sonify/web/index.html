@@ -56,87 +56,68 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2 data-i18n="section.environment">Environnement</h2>
-        <div class="row">
-          <label style="min-width: 240px;" class="tip" tabindex="0" data-i18n-tip="tip.preset" data-tip="Un preset (environnement) = un ensemble de réglages (fond + canaux). La sélection applique le preset immédiatement. “Sauver” enregistre la config courante comme preset (dans la mémoire du serveur + environments/), et “Sauver config” écrit tout dans le fichier JSON.">
-            <span data-i18n="label.preset">Preset</span>
-            <select id="envSelect"></select>
-          </label>
-          <label style="min-width: 240px;">
-            <span data-i18n="label.name">Nom</span>
-            <input id="envName" type="text" data-i18n-placeholder="ph.env_name" placeholder="ex: mon-jardin" />
-          </label>
-          <label>
-            <span>&nbsp;</span>
-            <button id="envSave" data-i18n-title="title.save_preset" title="Sauve la config courante comme preset sous ce nom." data-i18n="btn.save">Sauver</button>
-          </label>
-          <label class="muted small" data-i18n-title="title.overwrite" title="Si coché, remplace un preset existant portant le même nom."><input id="envOverwrite" type="checkbox" /> <span data-i18n="label.overwrite">écraser si existe</span></label>
-          <span id="envStatus" class="muted"></span>
-        </div>
-        <div id="envHint" class="muted small"></div>
-        <div class="muted small" data-i18n="hint.preset_apply">Sélectionner un preset le copie dans la config courante. “Sauver” enregistre la config courante comme preset.</div>
-      </section>
+	      <section class="panel">
+	        <h2 data-i18n="section.import_sounds">Importer des sons</h2>
+	        <div class="row">
+	          <input id="uploadFile" type="file" accept=".wav,.mp3,.ogg,.oga,audio/*" data-i18n-title="title.choose_audio" title="Choisis un fichier audio (.wav recommandé). Il sera copié dans le dossier samples/." />
+	          <button id="uploadBtn" data-i18n-title="title.import_sound" title="Importe le fichier sélectionné dans samples/ et met à jour les listes “son”." data-i18n="btn.import">Importer</button>
+	          <button id="samplesRefresh" data-i18n-title="title.refresh_sounds" title="Rafraîchit la liste des sons depuis le dossier samples/.">↻</button>
+	          <span id="uploadStatus" class="muted"></span>
+	        </div>
+	        <div class="muted small" data-i18n="hint.imported_stored">Les fichiers importés sont stockés dans `samples/` et apparaissent dans les listes “son”.</div>
+	        <div class="row wrap" style="margin-top: 10px; align-items: flex-end;">
+	          <div class="muted small" data-i18n="label.listen_sounds">Écouter les sons :</div>
+	          <label class="tip" style="max-width: 220px;" tabindex="0" data-i18n-tip="tip.preview_volume" data-tip="Règle le volume des boutons ▶/↻ dans cette section (sans affecter les sons réseau).">
+	            <span data-i18n="label.preview_volume">Volume test</span>
+	            <input id="samplesPreviewGain" type="range" min="0" max="1" step="0.01" />
+	          </label>
+	        </div>
+	        <div class="row" style="margin-top: 6px;">
+	          <div id="samplesList" class="muted small"></div>
+	        </div>
+	      </section>
 
-      <section class="panel">
-        <h2 data-i18n="section.import_sounds">Importer des sons</h2>
-        <div class="row">
-          <input id="uploadFile" type="file" accept=".wav,.mp3,.ogg,.oga,audio/*" data-i18n-title="title.choose_audio" title="Choisis un fichier audio (.wav recommandé). Il sera copié dans le dossier samples/." />
-          <button id="uploadBtn" data-i18n-title="title.import_sound" title="Importe le fichier sélectionné dans samples/ et met à jour les listes “son”." data-i18n="btn.import">Importer</button>
-          <button id="samplesRefresh" data-i18n-title="title.refresh_sounds" title="Rafraîchit la liste des sons depuis le dossier samples/.">↻</button>
-          <span id="uploadStatus" class="muted"></span>
-        </div>
-        <div class="muted small" data-i18n="hint.imported_stored">Les fichiers importés sont stockés dans `samples/` et apparaissent dans les listes “son”.</div>
-        <div class="row" style="margin-top: 10px;">
-          <div class="muted small" data-i18n="label.listen_sounds">Écouter les sons :</div>
-          <div id="samplesList" class="muted small"></div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2 data-i18n="section.charts">Courbes</h2>
-        <div class="row">
-          <label class="muted small" data-i18n-title="title.toggle_pps" title="Affiche/masque la courbe pps."><input id="toggleChartPps" type="checkbox" checked /> <span data-i18n="label.pps">pps</span></label>
-          <label class="muted small" data-i18n-title="title.toggle_top" title="Affiche/masque le graphe en bâtons (top canaux)."><input id="toggleChartTop" type="checkbox" checked /> <span data-i18n="label.top_channels">top canaux</span></label>
-        </div>
-        <div class="charts">
+	      <section class="panel">
+	        <h2 data-i18n="section.charts">Courbes</h2>
+	        <div class="charts">
           <div class="chartBox" id="chartBoxPps">
-            <div class="muted small" data-i18n="chart.pps_title">pps (total / in / out)</div>
-            <div class="legend">
-              <span class="sw sw-total"></span><span class="lbl" data-i18n="legend.total">total</span>
-              <span class="sw sw-in"></span><span class="lbl" data-i18n="legend.in">in</span>
-              <span class="sw sw-out"></span><span class="lbl" data-i18n="legend.out">out</span>
+            <button id="foldPps" type="button" class="foldHdr" data-i18n-title="title.toggle_pps" title="Affiche/masque la courbe pps.">
+              <span class="chev" aria-hidden="true">▾</span>
+              <span class="muted small" data-i18n="chart.pps_title">pps (total / in / out)</span>
+            </button>
+            <div id="chartBodyPps">
+              <div class="legend">
+                <span class="sw sw-total"></span><span class="lbl" data-i18n="legend.total">total</span>
+                <span class="sw sw-in"></span><span class="lbl" data-i18n="legend.in">in</span>
+                <span class="sw sw-out"></span><span class="lbl" data-i18n="legend.out">out</span>
+              </div>
+              <canvas id="chartPps" width="1100" height="180" data-i18n-title="title.chart_pps" title="Évolution des pps sur les derniers instants (fenêtre glissante)."></canvas>
             </div>
-            <canvas id="chartPps" width="1100" height="180" data-i18n-title="title.chart_pps" title="Évolution des pps sur les derniers instants (fenêtre glissante)."></canvas>
           </div>
           <div class="chartBox" id="chartBoxTop">
-            <div class="muted small" data-i18n="chart.top_title">Top canaux (pps instantané)</div>
-            <div class="legend">
-              <span class="sw sw-tcp"></span><span class="lbl">tcp</span>
-              <span class="sw sw-udp"></span><span class="lbl">udp</span>
-              <span class="sw sw-dns"></span><span class="lbl">dns</span>
-              <span class="sw sw-icmp"></span><span class="lbl">icmp</span>
+            <button id="foldTop" type="button" class="foldHdr" data-i18n-title="title.toggle_top" title="Affiche/masque le graphe en bâtons (top canaux).">
+              <span class="chev" aria-hidden="true">▾</span>
+              <span class="muted small" data-i18n="chart.top_title">Top canaux (pps instantané)</span>
+            </button>
+            <div id="chartBodyTop">
+              <div class="legend">
+                <span class="sw sw-tcp"></span><span class="lbl">tcp</span>
+                <span class="sw sw-udp"></span><span class="lbl">udp</span>
+                <span class="sw sw-dns"></span><span class="lbl">dns</span>
+                <span class="sw sw-icmp"></span><span class="lbl">icmp</span>
+              </div>
+              <div id="chartTopInLabel" class="muted small">in.*</div>
+              <canvas id="chartTopIn" width="1100" height="180" data-i18n-title="title.chart_top_in" title="Top des canaux entrants (in.*) sur le dernier bloc."></canvas>
+              <div id="chartTopOutLabel" class="muted small" style="margin-top: 10px;">out.*</div>
+              <canvas id="chartTopOut" width="1100" height="180" data-i18n-title="title.chart_top_out" title="Top des canaux sortants (out.*) sur le dernier bloc."></canvas>
             </div>
-            <div id="chartTopInLabel" class="muted small">in.*</div>
-            <canvas id="chartTopIn" width="1100" height="180" data-i18n-title="title.chart_top_in" title="Top des canaux entrants (in.*) sur le dernier bloc."></canvas>
-            <div id="chartTopOutLabel" class="muted small" style="margin-top: 10px;">out.*</div>
-            <canvas id="chartTopOut" width="1100" height="180" data-i18n-title="title.chart_top_out" title="Top des canaux sortants (out.*) sur le dernier bloc."></canvas>
           </div>
-        </div>
-      </section>
+	        </div>
+	      </section>
 
-      <section class="panel">
-        <h2 data-i18n="section.recording">Enregistrement</h2>
-        <div class="row">
-          <button id="recordBtn" data-i18n-title="title.record" title="Enregistre la sortie audio du navigateur (ce que tu entends). Clique à nouveau pour arrêter." data-i18n="btn.record_start">Enregistrer</button>
-          <span id="recordStatus" class="muted"></span>
-          <a id="recordDownload" class="muted small" style="display:none;" download data-i18n="link.download">télécharger</a>
-          <span class="help" tabindex="0" data-i18n-tip="tip.recording" data-tip="L’enregistrement se fait côté navigateur (WebAudio). Le fichier sera en général en .webm (Opus) selon les capacités du navigateur.">?</span>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2 data-i18n="section.background">Fond (continu)</h2>
+	      <section class="panel">
+	        <h2 data-i18n="section.background">Fond (continu)</h2>
+	        <div class="muted small" data-i18n="hint.background_explain">Ambiance en continu (ex: ruisseau/vent/vagues) dont le volume suit l’activité réseau globale. Pour couper l’ambiance, mets “sans fond” ou Volume à 0.</div>
         <div class="controls">
           <label>
             <span data-i18n="bg.sound">Son</span>
@@ -163,20 +144,44 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2 data-i18n="section.channels">Canaux (par type + direction)</h2>
-        <div class="muted small" data-i18n-html="hint.mode_explain_html">Mode <span class="pill">loop</span> = continu (boucle, volume modulé). Mode <span class="pill">one-shot</span> = discret (événements).</div>
-        <table id="channels">
-          <thead>
-            <tr>
+	      <section class="panel">
+	        <h2><span data-i18n="section.packets">Paquets</span><span id="packetsEnvTitle" class="muted"></span></h2>
+	        <div class="row wrap" style="align-items: flex-end; gap: 10px;">
+	          <label style="min-width: 240px;" class="tip" tabindex="0" data-i18n-tip="tip.preset" data-tip="Un preset (environnement) = un ensemble de réglages (fond + canaux). La sélection applique le preset immédiatement. “Sauver” enregistre la config courante comme preset (dans la mémoire du serveur + environments/), et “Sauver config” écrit tout dans le fichier JSON.">
+	            <span data-i18n="label.preset">Preset</span>
+	            <select id="envSelect"></select>
+	          </label>
+	          <label style="min-width: 240px;">
+	            <span data-i18n="label.name">Nom</span>
+	            <input id="envName" type="text" data-i18n-placeholder="ph.env_name" placeholder="ex: mon-jardin" />
+	          </label>
+	          <button id="envSave" class="envSaveBtn" data-i18n-title="title.save_preset" title="Sauve la config courante comme preset sous ce nom." data-i18n="btn.save">Sauver</button>
+	          <span id="envStatus" class="muted"></span>
+	          <div class="packetActions packetActionsTop">
+	            <button id="recordBtn" class="mini" data-i18n-title="title.record" title="Enregistre la sortie audio du navigateur (ce que tu entends). Clique à nouveau pour arrêter." data-i18n="btn.record_start">Enregistrer</button>
+	            <span id="recordStatus" class="muted"></span>
+	            <button id="toggleMuteNetBtn" type="button" class="mini tip" tabindex="0" data-i18n-title="title.mute_net" title="Coupe les sons pilotés par le trafic (fond + canaux). Utile pour tester les sons importés; les boutons ▶/↻ restent audibles.">Couper sons réseau</button>
+	            <span class="help" tabindex="0" data-i18n-tip="tip.recording" data-tip="L’enregistrement se fait côté navigateur (WebAudio). Le fichier sera en général en .webm (Opus) selon les capacités du navigateur.">?</span>
+	          </div>
+	        </div>
+	        <div class="row wrap" style="justify-content: space-between; gap: 12px; margin-top: 6px;">
+	          <div class="muted small" data-i18n-html="hint.mode_explain_html">Mode <span class="pill">loop</span> = continu (boucle, volume modulé). Mode <span class="pill">one-shot</span> = discret (événements).</div>
+	        </div>
+	        <div class="row wrap packetActionsExtras">
+	          <a id="recordDownload" class="muted small" style="display:none;" download data-i18n="link.download">télécharger</a>
+	          <button id="recordSaveDisk" class="muted small" style="display:none;" data-i18n-title="title.record_save_disk" title="Sauve l’enregistrement dans le dossier recordings/ du projet (utile si tu veux éviter les réglages de téléchargement du navigateur)." data-i18n="btn.record_save_disk">sauver sur disque</button>
+	        </div>
+	        <div id="envHint" class="muted small" style="margin-top: 6px;"></div>
+	        <div class="muted small" data-i18n="hint.preset_apply">Sélectionner un preset le copie dans la config courante. “Sauver” enregistre la config courante comme preset.</div>
+	        <table id="channels">
+	          <thead>
+	            <tr>
               <th class="tip" tabindex="0" data-i18n="th.active" data-i18n-tip="tip.th.active" data-tip="Active/désactive ce canal (persisté dans la config).">actif</th>
               <th class="tip" tabindex="0" data-i18n="th.key" data-i18n-tip="tip.th.key" data-tip="Type + direction (in.=entrant, out.=sortant). Survole une clé pour une définition + exemples.">Clé</th>
               <th class="tip" tabindex="0" data-i18n="th.pps" data-i18n-tip="tip.th.pps" data-tip="pps = paquets par seconde (estimé sur le dernier bloc).">pps</th>
               <th class="tip" tabindex="0" data-i18n="th.hint" data-i18n-tip="tip.th.hint" data-tip="Indication ‘plutôt continu’ vs ‘plutôt discret’. C’est un point de départ: ajuste selon ton oreille et ton trafic.">conseil</th>
               <th class="tip" tabindex="0" data-i18n="th.mode" data-i18n-tip="tip.th.mode" data-tip="one-shot = joue des événements discrets. loop = joue un son en boucle dont le volume suit le débit.">mode</th>
               <th class="tip" tabindex="0" data-i18n="th.sound" data-i18n-tip="tip.th.sound" data-tip="Choisis un fichier dans samples/ OU un son interne (@chirp/@drone/@noise).">son</th>
-              <th class="tip" tabindex="0" data-i18n="th.freq" data-i18n-tip="tip.th.freq" data-tip="Fréquence (Hz) utilisée uniquement pour les sons internes (@chirp/@drone).">freq</th>
-              <th class="tip" tabindex="0" data-i18n="th.dur" data-i18n-tip="tip.th.dur" data-tip="Durée (ms) utilisée uniquement pour @chirp.">dur</th>
               <th class="tip" tabindex="0" data-i18n="th.volume" data-i18n-tip="tip.th.volume" data-tip="Volume max du canal (ensuite modulé selon le débit et Gamma).">volume</th>
               <th class="tip" tabindex="0" data-i18n="th.rate" data-i18n-tip="tip.th.rate" data-tip="Débit de référence (paquets/s): quand pps≈débit, on atteint ~le volume max (selon Gamma).">débit</th>
               <th class="tip" tabindex="0" data-i18n="th.gamma" data-i18n-tip="tip.th.gamma" data-tip="Courbe de réponse: plus petit = monte vite; plus grand = plus progressif.">gamma</th>
