@@ -210,6 +210,55 @@ canvas { width: 100%; height: 180px; display: block; }
   font-size: 13px;
 }
 
+.ipTracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(34,48,77,0.35);
+}
+
+.ipBox {
+  border: 1px solid rgba(34,48,77,0.35);
+  background: rgba(255,255,255,0.015);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.ipBox input[type="text"] {
+  min-width: 220px;
+}
+
+.ipBox .samples {
+  margin-top: 8px;
+}
+
+.ipBox .chip button {
+  padding: 2px 8px;
+  opacity: 0.9;
+}
+
+.ipBox .chip button.danger {
+  border-color: rgba(255,90,111,0.55);
+  background: rgba(255,90,111,0.12);
+}
+
+.ipBox .help {
+  align-self: center;
+}
+
+.ipBox .chip .name {
+  max-width: 320px;
+}
+
+.ipBox #ipTrackStatus.bad { color: rgba(255,90,111,0.95); }
+.ipBox #ipTrackStatus.ok { color: rgba(73,211,139,0.95); }
+
+@media (max-width: 980px) {
+  .ipTracks { grid-template-columns: 1fr; }
+}
+
 .packetActions {
   display: flex;
   flex-wrap: wrap;
@@ -309,6 +358,16 @@ tbody td {
   padding: 8px 10px;
   border-bottom: 1px solid rgba(34,48,77,0.55);
   vertical-align: middle;
+}
+
+tr.groupRow td {
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(34,48,77,0.55);
+  color: rgba(165,178,207,0.95);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(255,255,255,0.015);
 }
 tbody tr:hover { background: rgba(255,255,255,0.03); }
 .num { font-variant-numeric: tabular-nums; }

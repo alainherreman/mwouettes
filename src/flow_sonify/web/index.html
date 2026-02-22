@@ -167,16 +167,16 @@
 	        <div class="row wrap" style="justify-content: space-between; gap: 12px; margin-top: 6px;">
 	          <div class="muted small" data-i18n-html="hint.mode_explain_html">Mode <span class="pill">loop</span> = continu (boucle, volume modulé). Mode <span class="pill">one-shot</span> = discret (événements).</div>
 	        </div>
-	        <div class="row wrap packetActionsExtras">
-	          <a id="recordDownload" class="muted small" style="display:none;" download data-i18n="link.download">télécharger</a>
-	          <button id="recordSaveDisk" class="muted small" style="display:none;" data-i18n-title="title.record_save_disk" title="Sauve l’enregistrement dans le dossier recordings/ du projet (utile si tu veux éviter les réglages de téléchargement du navigateur)." data-i18n="btn.record_save_disk">sauver sur disque</button>
-	        </div>
-	        <div id="envHint" class="muted small" style="margin-top: 6px;"></div>
-	        <div class="muted small" data-i18n="hint.preset_apply">Sélectionner un preset le copie dans la config courante. “Sauver” enregistre la config courante comme preset.</div>
-	        <table id="channels">
-	          <thead>
-	            <tr>
-              <th class="tip" tabindex="0" data-i18n="th.active" data-i18n-tip="tip.th.active" data-tip="Active/désactive ce canal (persisté dans la config).">actif</th>
+		        <div class="row wrap packetActionsExtras">
+		          <a id="recordDownload" class="muted small" style="display:none;" download data-i18n="link.download">télécharger</a>
+		          <button id="recordSaveDisk" class="muted small" style="display:none;" data-i18n-title="title.record_save_disk" title="Sauve l’enregistrement dans le dossier recordings/ du projet (utile si tu veux éviter les réglages de téléchargement du navigateur)." data-i18n="btn.record_save_disk">sauver sur disque</button>
+		        </div>
+		        <div id="envHint" class="muted small" style="margin-top: 6px;"></div>
+		        <div class="muted small" data-i18n="hint.preset_apply">Sélectionner un preset le copie dans la config courante. “Sauver” enregistre la config courante comme preset.</div>
+		        <table id="channels">
+		          <thead>
+		            <tr>
+	              <th class="tip" tabindex="0" data-i18n="th.active" data-i18n-tip="tip.th.active" data-tip="Active/désactive ce canal (persisté dans la config).">actif</th>
               <th class="tip" tabindex="0" data-i18n="th.key" data-i18n-tip="tip.th.key" data-tip="Type + direction (in.=entrant, out.=sortant). Survole une clé pour une définition + exemples.">Clé</th>
               <th class="tip" tabindex="0" data-i18n="th.pps" data-i18n-tip="tip.th.pps" data-tip="pps = paquets par seconde (estimé sur le dernier bloc).">pps</th>
               <th class="tip" tabindex="0" data-i18n="th.hint" data-i18n-tip="tip.th.hint" data-tip="Indication ‘plutôt continu’ vs ‘plutôt discret’. C’est un point de départ: ajuste selon ton oreille et ton trafic.">conseil</th>
@@ -187,11 +187,33 @@
               <th class="tip" tabindex="0" data-i18n="th.gamma" data-i18n-tip="tip.th.gamma" data-tip="Courbe de réponse: plus petit = monte vite; plus grand = plus progressif.">gamma</th>
               <th class="tip" tabindex="0" data-i18n="th.listen" data-i18n-tip="tip.th.listen" data-tip="Couper un canal (M), n’entendre que lui (S), ou jouer un test (▶).">écoute</th>
             </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </section>
-    </main>
+	          </thead>
+	          <tbody></tbody>
+	        </table>
+	        <div class="ipTracks">
+	          <div class="ipBox">
+	            <div class="row" style="justify-content: space-between; margin-top: 6px;">
+	              <div class="muted small" data-i18n="label.ip_in">IPs entrantes</div>
+	              <span class="help" tabindex="0" data-i18n-tip="tip.ip_tracks" data-tip="Ajoute des IP à suivre (exactes ou partielles). Ex: 8.8.8.8, 151.101., 151.101.0.0/16. Elles sont enregistrées dans le preset.">?</span>
+	            </div>
+	            <div class="row" style="margin-top: 6px;">
+	              <input id="ipInInput" type="text" data-i18n-placeholder="ph.ip" placeholder="ex: 151.101.0.0/16" />
+	              <button id="ipInAdd" type="button" class="mini" data-i18n="btn.add">Ajouter</button>
+	            </div>
+	          </div>
+	          <div class="ipBox">
+	            <div class="row" style="justify-content: space-between; margin-top: 6px;">
+	              <div class="muted small" data-i18n="label.ip_out">IPs sortantes</div>
+	              <span id="ipTrackStatus" class="muted small"></span>
+	            </div>
+	            <div class="row" style="margin-top: 6px;">
+	              <input id="ipOutInput" type="text" data-i18n-placeholder="ph.ip" placeholder="ex: 8.8.8.8" />
+	              <button id="ipOutAdd" type="button" class="mini" data-i18n="btn.add">Ajouter</button>
+	            </div>
+	          </div>
+	        </div>
+	      </section>
+	    </main>
 
     <footer>
       <div class="muted small" data-i18n="footer.hint_audio">Astuce: si tu n’entends rien, clique “Démarrer audio” (WebAudio nécessite une interaction utilisateur).</div>

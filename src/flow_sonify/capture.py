@@ -12,6 +12,8 @@ import threading
 import time
 from typing import Iterable
 
+from .ip_tracks import best_match_key, compile_ip_tracks
+
 
 @dataclass(frozen=True)
 class PacketEvent:
@@ -33,6 +35,35 @@ class TrafficCounters:
             snap = self._counter
             self._counter = Counter()
             return snap
+
+
+class IpTracksState:
+    """
+    Thread-safe store of compiled IP tracking rules.
+    Used by sniffers to increment extra keys like `in.ip.151.101.0.0/16`.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._compiled_in = []
+        self._compiled_out = []
+
+    def set_tracks(self, incoming: Iterable[str], outgoing: Iterable[str]) -> None:
+        compiled_in = compile_ip_tracks("in", list(incoming or []))
+        compiled_out = compile_ip_tracks("out", list(outgoing or []))
+        with self._lock:
+            self._compiled_in = compiled_in
+            self._compiled_out = compiled_out
+
+    def match_key(self, direction: str, remote_ip: str | None) -> str | None:
+        if not remote_ip:
+            return None
+        d = (direction or "").strip().lower()
+        with self._lock:
+            compiled = self._compiled_in if d == "in" else self._compiled_out if d == "out" else []
+            # copy reference (compiled entries are immutable dataclasses)
+            compiled_ref = compiled
+        return best_match_key(compiled_ref, remote_ip)
 
 
 def find_exe(name: str) -> str | None:
@@ -90,7 +121,7 @@ def _normalize_ip(value: str) -> str:
         return value
 
 
-def classify_packet(packet: object, local_ips: set[str]) -> list[str]:
+def classify_packet(packet: object, local_ips: set[str], ip_tracks_state: IpTracksState | None = None) -> list[str]:
     """
     Retourne des clés d'événements du type:
       - in.tcp / out.tcp
@@ -106,7 +137,7 @@ def classify_packet(packet: object, local_ips: set[str]) -> list[str]:
         from scapy.layers.inet import ICMP, IP, TCP, UDP
         from scapy.layers.inet6 import IPv6
     except Exception:
-        return keys
+        return []
 
     direction = "unknown"
     src_ip = None
@@ -159,6 +190,13 @@ def classify_packet(packet: object, local_ips: set[str]) -> list[str]:
             keys_set.add("dns.total")
             if direction in ("in", "out"):
                 keys_set.add(f"{direction}.dns")
+
+    # Optional IP tracking (remote peer)
+    if ip_tracks_state is not None and direction in ("in", "out"):
+        remote = src_ip if direction == "in" else dst_ip
+        k = ip_tracks_state.match_key(direction, remote)
+        if k:
+            keys_set.add(k)
 
     return sorted(keys_set)
 
@@ -242,12 +280,14 @@ class PcapSniffer(threading.Thread):
         counters: TrafficCounters,
         stop_event: threading.Event,
         bpf_filter: str = "",
+        ip_tracks_state: IpTracksState | None = None,
     ) -> None:
         super().__init__(daemon=True)
         self.interface = interface
         self.counters = counters
         self.stop_event = stop_event
         self.bpf_filter = bpf_filter
+        self.ip_tracks_state = ip_tracks_state
         self.error: str | None = None
 
         self.local_ips = get_local_ips_for_iface(interface)
@@ -262,7 +302,7 @@ class PcapSniffer(threading.Thread):
         def on_packet(pkt: object) -> None:
             if self.stop_event.is_set():
                 return
-            keys = classify_packet(pkt, self.local_ips)
+            keys = classify_packet(pkt, self.local_ips, self.ip_tracks_state)
             if keys:
                 self.counters.incr_many(keys)
 
@@ -321,7 +361,7 @@ def _proto_from_tail(tail: str) -> str | None:
     return None
 
 
-def classify_tcpdump_line(line: str, local_ips: set[str]) -> list[str]:
+def classify_tcpdump_line(line: str, local_ips: set[str], ip_tracks_state: IpTracksState | None = None) -> list[str]:
     m = _TCPDUMP_RE.search(line)
     if not m:
         # Fallback: certains formats tcpdump peuvent varier (ou inclure des champs).
@@ -373,6 +413,12 @@ def classify_tcpdump_line(line: str, local_ips: set[str]) -> list[str]:
     elif proto in ("tcp", "udp") and (src_port == 53 or dst_port == 53):
         keys_set.add("dns.total")
 
+    if ip_tracks_state is not None and direction in ("in", "out"):
+        remote = src_ip if direction == "in" else dst_ip
+        k = ip_tracks_state.match_key(direction, remote)
+        if k:
+            keys_set.add(k)
+
     return sorted(keys_set)
 
 
@@ -384,12 +430,14 @@ class TcpdumpSniffer(threading.Thread):
         counters: TrafficCounters,
         stop_event: threading.Event,
         bpf_filter: str = "",
+        ip_tracks_state: IpTracksState | None = None,
     ) -> None:
         super().__init__(daemon=True)
         self.interface = interface
         self.counters = counters
         self.stop_event = stop_event
         self.bpf_filter = bpf_filter
+        self.ip_tracks_state = ip_tracks_state
         self.error: str | None = None
 
         self.local_ips = get_local_ips_for_iface(interface)
@@ -455,7 +503,7 @@ class TcpdumpSniffer(threading.Thread):
             for line in self._proc.stdout:
                 if self.stop_event.is_set():
                     break
-                keys = classify_tcpdump_line(line, self.local_ips)
+                keys = classify_tcpdump_line(line, self.local_ips, self.ip_tracks_state)
                 if keys:
                     self.counters.incr_many(keys)
 
@@ -504,6 +552,8 @@ class CaptureManager:
         self.app_stop_event = app_stop_event
         self.capture_backend = capture_backend
         self.bpf_filter = bpf_filter
+        self.ip_tracks_state = IpTracksState()
+        self.ip_tracks_state.set_tracks([], [])
 
         self._lock = threading.Lock()
         self._sniffer: threading.Thread | None = None
@@ -555,11 +605,23 @@ class CaptureManager:
                 import scapy  # noqa: F401
             except Exception as e:
                 raise ValueError(f"backend scapy indisponible: {e}") from e
-            sniffer = PcapSniffer(interface=iface, counters=self.counters, stop_event=stop, bpf_filter=self.bpf_filter)
+            sniffer = PcapSniffer(
+                interface=iface,
+                counters=self.counters,
+                stop_event=stop,
+                bpf_filter=self.bpf_filter,
+                ip_tracks_state=self.ip_tracks_state,
+            )
         else:
             if find_exe("tcpdump") is None:
                 raise ValueError("backend tcpdump indisponible: `tcpdump` introuvable")
-            sniffer = TcpdumpSniffer(interface=iface, counters=self.counters, stop_event=stop, bpf_filter=self.bpf_filter)
+            sniffer = TcpdumpSniffer(
+                interface=iface,
+                counters=self.counters,
+                stop_event=stop,
+                bpf_filter=self.bpf_filter,
+                ip_tracks_state=self.ip_tracks_state,
+            )
 
         sniffer.start()
         # Give the sniffer a moment; if it exits immediately, surface an error to the UI.
@@ -607,3 +669,14 @@ class CaptureManager:
 
     def stop(self) -> None:
         self._stop_current()
+
+    def set_ip_tracks(self, incoming: Iterable[str], outgoing: Iterable[str]) -> None:
+        """
+        Updates the IP-tracking rules used by the capture backend.
+        Takes effect immediately without restarting capture.
+        """
+        try:
+            self.ip_tracks_state.set_tracks(incoming, outgoing)
+        except Exception:
+            # best-effort: keep capture running even if specs are invalid.
+            self.ip_tracks_state.set_tracks([], [])

@@ -100,6 +100,7 @@ class UiState:
         self.stop_event = stop_event
         self.bus = EventBus()
         self.capture = capture
+        self._sync_capture_state()
 
     def get_config(self) -> AppConfig:
         with self._lock:
@@ -110,6 +111,7 @@ class UiState:
             current = config_to_raw(self._config)
             merged = deep_merge(current, patch)
             self._config = parse_config(merged)
+            self._sync_capture_state()
             return self._config
 
     def apply_environment(self, name: str) -> AppConfig:
@@ -126,7 +128,10 @@ class UiState:
                 raw["river"] = env_raw["river"]
             if "channels" in env_raw:
                 raw["channels"] = env_raw["channels"]
+            if "ip_tracks" in env_raw:
+                raw["ip_tracks"] = env_raw.get("ip_tracks", None)
             self._config = parse_config(raw)
+            self._sync_capture_state()
             return self._config
 
     def save_environment(self, name: str, *, overwrite: bool) -> AppConfig:
@@ -141,6 +146,7 @@ class UiState:
             envs[str(name)] = {
                 "river": raw.get("river", {}),
                 "channels": raw.get("channels", {}),
+                "ip_tracks": raw.get("ip_tracks", None),
             }
             try:
                 _write_env_file(str(name), envs[str(name)])
@@ -150,7 +156,22 @@ class UiState:
             raw["environments"] = envs
             raw["active_environment"] = str(name)
             self._config = parse_config(raw)
+            self._sync_capture_state()
             return self._config
+
+    def _sync_capture_state(self) -> None:
+        cap = self.capture
+        if cap is None:
+            return
+        try:
+            cfg = self._config
+            it = getattr(cfg, "ip_tracks", None) or {}
+            ins = it.get("in", []) if isinstance(it, dict) else []
+            outs = it.get("out", []) if isinstance(it, dict) else []
+            cap.set_ip_tracks(ins, outs)
+        except Exception:
+            # best-effort (capture might not be running)
+            return
 
     def save_config(self, path: str | Path) -> Path:
         p = Path(path)
@@ -169,11 +190,13 @@ def config_to_raw(cfg: AppConfig) -> dict[str, Any]:
         "bpf_filter": cfg.bpf_filter,
         "river": asdict(cfg.river),
         "channels": {k: asdict(v) for k, v in cfg.channels.items()},
+        "ip_tracks": cfg.ip_tracks,
         "active_environment": cfg.active_environment,
         "environments": {
             name: {
                 "river": asdict(env.river),
                 "channels": {k: asdict(v) for k, v in env.channels.items()},
+                "ip_tracks": env.ip_tracks,
             }
             for name, env in cfg.environments.items()
         },
@@ -242,6 +265,7 @@ def _load_env_files() -> dict[str, dict[str, Any]]:
             env_raw = {
                 "river": raw.get("river", {}) or {},
                 "channels": raw.get("channels", {}) or {},
+                "ip_tracks": raw.get("ip_tracks", None),
             }
             if not isinstance(env_raw["river"], dict) or not isinstance(env_raw["channels"], dict):
                 continue
@@ -270,7 +294,12 @@ def _write_env_file(name: str, env_raw: dict[str, Any]) -> Path:
                     i += 1
         except Exception:
             pass
-    payload = {"name": name, "river": env_raw.get("river", {}) or {}, "channels": env_raw.get("channels", {}) or {}}
+    payload = {
+        "name": name,
+        "river": env_raw.get("river", {}) or {},
+        "channels": env_raw.get("channels", {}) or {},
+        "ip_tracks": env_raw.get("ip_tracks", None),
+    }
     p.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     _maybe_chown_to_sudo_user(p)
     return p

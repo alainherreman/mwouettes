@@ -61,6 +61,13 @@ const I18N = {
     "label.listen_sounds": "Écouter les sons :",
     "label.preview_volume": "Volume test",
     "tip.preview_volume": "Règle le volume des boutons ▶/↻ dans cette section (sans affecter les sons réseau).",
+    "label.ip_in": "IPs entrantes",
+    "label.ip_out": "IPs sortantes",
+    "ph.ip": "ex: 151.101.0.0/16",
+    "btn.add": "Ajouter",
+    "btn.remove": "Supprimer",
+    "tip.ip_tracks": "Ajoute des IP à suivre (exactes ou partielles). Ex: 8.8.8.8, 151.101., 151.101.0.0/16. Elles sont enregistrées dans le preset. Si plusieurs règles correspondent, la plus spécifique gagne (IP exacte > plage).",
+    "msg.ip_saved": "IPs enregistrées",
 
     "section.charts": "Courbes",
     "label.pps": "pps",
@@ -289,6 +296,13 @@ const I18N = {
     "label.listen_sounds": "Preview sounds:",
     "label.preview_volume": "Preview volume",
     "tip.preview_volume": "Adjusts the ▶/↻ preview volume in this section (does not affect network-driven sounds).",
+    "label.ip_in": "Incoming IPs",
+    "label.ip_out": "Outgoing IPs",
+    "ph.ip": "e.g. 151.101.0.0/16",
+    "btn.add": "Add",
+    "btn.remove": "Remove",
+    "tip.ip_tracks": "Track peers by IP (exact or partial). Examples: 8.8.8.8, 151.101., 151.101.0.0/16. Saved inside the preset. If multiple rules match, the most specific wins (exact IP > range).",
+    "msg.ip_saved": "IPs saved",
 
     "section.charts": "Charts",
     "label.pps": "pps",
@@ -803,6 +817,313 @@ async function saveConfig() {
   return out.saved;
 }
 
+function _getIpTracks() {
+  const it = config?.ip_tracks;
+  const ins = (it && typeof it === "object" && Array.isArray(it.in)) ? it.in.slice() : [];
+  const outs = (it && typeof it === "object" && Array.isArray(it.out)) ? it.out.slice() : [];
+  return { in: ins, out: outs };
+}
+
+let _ipTrackStatusTimer = null;
+function _setIpTrackStatus(msg, kind = "") {
+  const el = els("ipTrackStatus");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.classList.remove("ok", "bad");
+  if (kind === "ok") el.classList.add("ok");
+  if (kind === "bad") el.classList.add("bad");
+  if (_ipTrackStatusTimer) {
+    clearTimeout(_ipTrackStatusTimer);
+    _ipTrackStatusTimer = null;
+  }
+  if (msg) {
+    _ipTrackStatusTimer = setTimeout(() => {
+      const el2 = els("ipTrackStatus");
+      if (!el2) return;
+      el2.textContent = "";
+      el2.classList.remove("ok", "bad");
+      _ipTrackStatusTimer = null;
+    }, 2500);
+  }
+}
+
+async function _removeIpTrack(dir, spec) {
+  try {
+    const cur = _getIpTracks();
+    const nextList = (dir === "in" ? cur.in : cur.out).filter((x) => String(x) !== String(spec));
+    const patch = { ip_tracks: { ...cur, [dir]: nextList } };
+    await patchConfig(patch);
+    renderConfig();
+    _setIpTrackStatus(t("msg.ip_saved"), "ok");
+  } catch (e) {
+    _setIpTrackStatus(t("msg.error_prefix", { msg: e?.message || String(e) }), "bad");
+  }
+}
+
+async function _addIpTrack(dir) {
+  const input = els(dir === "in" ? "ipInInput" : "ipOutInput");
+  if (!input) return;
+  const raw = String(input.value || "").trim();
+  if (!raw) return;
+  try {
+    const cur = _getIpTracks();
+    const list = (dir === "in" ? cur.in : cur.out).slice();
+    if (!list.includes(raw)) list.push(raw);
+    await patchConfig({ ip_tracks: { ...cur, [dir]: list } });
+    input.value = "";
+    renderConfig();
+    _setIpTrackStatus(t("msg.ip_saved"), "ok");
+  } catch (e) {
+    _setIpTrackStatus(t("msg.error_prefix", { msg: e?.message || String(e) }), "bad");
+  }
+}
+
+function initIpTracksControls() {
+  const bIn = els("ipInAdd");
+  const bOut = els("ipOutAdd");
+  const inInput = els("ipInInput");
+  const outInput = els("ipOutInput");
+
+  if (bIn) bIn.addEventListener("click", () => { _addIpTrack("in"); });
+  if (bOut) bOut.addEventListener("click", () => { _addIpTrack("out"); });
+
+  const onEnter = (dir) => (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      _addIpTrack(dir);
+    }
+  };
+  if (inInput) inInput.addEventListener("keydown", onEnter("in"));
+  if (outInput) outInput.addEventListener("keydown", onEnter("out"));
+}
+
+function buildChannelRow(key, ch, sortedSamples, opts = {}) {
+  const tr = document.createElement("tr");
+  const keyLabel = (opts && typeof opts.keyLabel === "string") ? opts.keyLabel : key;
+  const onRemove = (opts && typeof opts.onRemove === "function") ? opts.onRemove : null;
+
+  const tdOn = document.createElement("td");
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = (ch.enabled ?? true);
+  cb.title = t("title.ch.enabled");
+  cb.addEventListener("change", async () => {
+    await patchConfig({ channels: { [key]: { enabled: !!cb.checked } } });
+  });
+  tdOn.appendChild(cb);
+  tr.appendChild(tdOn);
+
+  const tdKey = document.createElement("td");
+  tdKey.textContent = keyLabel;
+  tdKey.className = "key";
+  const info = keyInfo(key);
+  const titleParts = [];
+  if (keyLabel !== key) titleParts.push(key);
+  if (info) titleParts.push(info);
+  if (titleParts.length) tdKey.title = titleParts.join("\n\n");
+  tr.appendChild(tdKey);
+
+  const tdPps = document.createElement("td");
+  tdPps.className = "num";
+  tdPps.textContent = fmt(0.0);
+  tdPps.dataset.key = key;
+  tr.appendChild(tdPps);
+
+  const tdHint = document.createElement("td");
+  tdHint.className = "hint";
+  tdHint.textContent = recommendedHint(key);
+  tr.appendChild(tdHint);
+
+  const tdMode = document.createElement("td");
+  const sel = document.createElement("select");
+  const MODE_LABEL = { "one-shot": "mode.one_shot", "loop": "mode.loop" };
+  for (const m of ["one-shot", "loop"]) {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = t(MODE_LABEL[m] || m);
+    sel.appendChild(opt);
+  }
+  sel.value = (ch.mode || "one-shot");
+  sel.title = t("title.ch.mode");
+  sel.addEventListener("change", async () => {
+    await patchConfig({ channels: { [key]: { mode: sel.value } } });
+  });
+  tdMode.appendChild(sel);
+  tr.appendChild(tdMode);
+
+  const tdSample = document.createElement("td");
+  const selS = document.createElement("select");
+  for (const s of ["@none", ...sortedSamples]) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = sampleLabel(s);
+    selS.appendChild(opt);
+  }
+  selS.value = (ch.sample && (ch.sample === "@none" || sortedSamples.includes(ch.sample)))
+    ? ch.sample
+    : (sortedSamples[0] ?? "@none");
+  selS.title = t("title.ch.sound");
+  selS.addEventListener("change", async () => {
+    await patchConfig({ channels: { [key]: { sample: selS.value } } });
+  });
+  tdSample.appendChild(selS);
+  tr.appendChild(tdSample);
+
+  const tdGain = document.createElement("td");
+  const gainWrap = document.createElement("div");
+  gainWrap.className = "sliderCell";
+  const inGain = document.createElement("input");
+  inGain.type = "range";
+  inGain.min = "0";
+  inGain.max = "1.0";
+  inGain.step = "0.005";
+  inGain.value = ch.gain ?? 0.12;
+  inGain.title = t("title.ch.vol");
+  const gainVal = document.createElement("span");
+  gainVal.className = "sliderVal num";
+  const setGainVal = () => { gainVal.textContent = (+inGain.value).toFixed(2); };
+  setGainVal();
+  inGain.addEventListener("input", () => {
+    setGainVal();
+    schedulePatch({ channels: { [key]: { gain: parseFloat(inGain.value) } } });
+  });
+  inGain.addEventListener("change", () => {
+    schedulePatch({ channels: { [key]: { gain: parseFloat(inGain.value) } } }, 0);
+  });
+  gainWrap.appendChild(inGain);
+  gainWrap.appendChild(gainVal);
+  tdGain.appendChild(gainWrap);
+  tr.appendChild(tdGain);
+
+  const tdRef = document.createElement("td");
+  const refWrap = document.createElement("div");
+  refWrap.className = "sliderCell";
+  const inRef = document.createElement("input");
+  inRef.type = "range";
+  inRef.min = "0";
+  inRef.max = "1000";
+  inRef.step = "1";
+  const REF_MIN = 1;
+  const REF_MAX = 50000;
+  const refFromPos = (pos) => {
+    const p = Math.max(0, Math.min(1000, pos)) / 1000.0;
+    const v = REF_MIN * Math.pow(REF_MAX / REF_MIN, p);
+    return Math.max(1, Math.round(v));
+  };
+  const posFromRef = (ref) => {
+    const v = Math.max(REF_MIN, Math.min(REF_MAX, ref || REF_MIN));
+    const p = Math.log(v / REF_MIN) / Math.log(REF_MAX / REF_MIN);
+    return Math.max(0, Math.min(1000, Math.round(p * 1000)));
+  };
+  const initialRef = Math.max(1, Math.round(ch.ref_pps ?? 50));
+  inRef.value = String(posFromRef(initialRef));
+  inRef.title = t("title.ch.ref");
+  const refVal = document.createElement("span");
+  refVal.className = "sliderVal num";
+  const setRefVal = () => { refVal.textContent = String(refFromPos(parseInt(inRef.value, 10))); };
+  setRefVal();
+  inRef.addEventListener("input", () => {
+    setRefVal();
+    schedulePatch({ channels: { [key]: { ref_pps: refFromPos(parseInt(inRef.value, 10)) } } });
+  });
+  inRef.addEventListener("change", () => {
+    schedulePatch({ channels: { [key]: { ref_pps: refFromPos(parseInt(inRef.value, 10)) } } }, 0);
+  });
+  refWrap.appendChild(inRef);
+  refWrap.appendChild(refVal);
+  tdRef.appendChild(refWrap);
+  tr.appendChild(tdRef);
+
+  const tdGamma = document.createElement("td");
+  const gammaWrap = document.createElement("div");
+  gammaWrap.className = "sliderCell";
+  const inGamma = document.createElement("input");
+  inGamma.type = "range";
+  inGamma.min = "0.1";
+  inGamma.max = "3";
+  inGamma.step = "0.05";
+  inGamma.value = ch.gamma ?? 0.75;
+  inGamma.title = t("title.ch.gamma");
+  const gammaVal = document.createElement("span");
+  gammaVal.className = "sliderVal num";
+  const setGammaVal = () => { gammaVal.textContent = (+inGamma.value).toFixed(2); };
+  setGammaVal();
+  inGamma.addEventListener("input", () => {
+    setGammaVal();
+    schedulePatch({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } });
+  });
+  inGamma.addEventListener("change", () => {
+    schedulePatch({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } }, 0);
+  });
+  gammaWrap.appendChild(inGamma);
+  gammaWrap.appendChild(gammaVal);
+  tdGamma.appendChild(gammaWrap);
+  tr.appendChild(tdGamma);
+
+  const tdTest = document.createElement("td");
+  tdTest.className = "listen";
+  const m = document.createElement("button");
+  m.className = "mini";
+  m.textContent = uiState.mutedKeys.has(key) ? "M" : "M";
+  m.title = uiState.mutedKeys.has(key) ? t("title.ch.mute_on") : t("title.ch.mute_off");
+  if (uiState.mutedKeys.has(key)) m.classList.add("danger");
+  m.addEventListener("click", () => {
+    if (uiState.mutedKeys.has(key)) uiState.mutedKeys.delete(key);
+    else uiState.mutedKeys.add(key);
+    saveUiState();
+    if (audio) audio.setOverrides(uiState);
+    renderConfig();
+  });
+
+  const s = document.createElement("button");
+  s.className = "mini";
+  s.textContent = "S";
+  const isSolo = uiState.soloKey === key;
+  s.title = isSolo ? t("title.ch.solo_on") : t("title.ch.solo_off");
+  if (isSolo) s.classList.add("primary");
+  s.addEventListener("click", () => {
+    uiState.soloKey = (uiState.soloKey === key) ? null : key;
+    saveUiState();
+    if (audio) audio.setOverrides(uiState);
+    renderConfig();
+  });
+
+  const b = document.createElement("button");
+  b.className = "mini";
+  b.textContent = "▶";
+  b.addEventListener("click", () => {
+    if (!audio) return;
+    audio.playTest(key);
+  });
+
+  tdTest.appendChild(m);
+  tdTest.appendChild(s);
+  tdTest.appendChild(b);
+
+  if (onRemove) {
+    const x = document.createElement("button");
+    x.className = "mini danger";
+    x.textContent = "×";
+    x.title = t("btn.remove");
+    x.addEventListener("click", () => { onRemove(); });
+    tdTest.appendChild(x);
+  }
+
+  tr.appendChild(tdTest);
+
+  return tr;
+}
+
+function _groupRow(label, colCount) {
+  const tr = document.createElement("tr");
+  tr.className = "groupRow";
+  const td = document.createElement("td");
+  td.colSpan = colCount;
+  td.textContent = label;
+  tr.appendChild(td);
+  return tr;
+}
+
 function renderConfig() {
   if (!config) return;
   els("block").textContent = `${blockMs} ms`;
@@ -888,207 +1209,37 @@ function renderConfig() {
   const tbody = els("channels").querySelector("tbody");
   tbody.innerHTML = "";
   const channels = config.channels || {};
-  const keys = Object.keys(channels).sort();
-  for (const key of keys) {
+  const allKeys = Object.keys(channels);
+  const packetKeys = allKeys.filter((k) => !(k.startsWith("in.ip.") || k.startsWith("out.ip."))).sort();
+  for (const key of packetKeys) {
     const ch = channels[key] || {};
-    const tr = document.createElement("tr");
+    tbody.appendChild(buildChannelRow(key, ch, sortedSamples));
+  }
 
-    const tdOn = document.createElement("td");
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = (ch.enabled ?? true);
-    cb.title = t("title.ch.enabled");
-    cb.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { enabled: !!cb.checked } } });
-    });
-    tdOn.appendChild(cb);
-    tr.appendChild(tdOn);
+  const it = _getIpTracks();
+  const inSpecs = (it.in || []).slice();
+  const outSpecs = (it.out || []).slice();
+  const colCount = 10;
 
-    const tdKey = document.createElement("td");
-    tdKey.textContent = key;
-    tdKey.className = "key";
-    const info = keyInfo(key);
-    if (info) tdKey.title = info;
-    tr.appendChild(tdKey);
-
-    const tdPps = document.createElement("td");
-    tdPps.className = "num";
-    tdPps.textContent = fmt(0.0);
-    tdPps.dataset.key = key;
-    tr.appendChild(tdPps);
-
-    const tdHint = document.createElement("td");
-    tdHint.className = "hint";
-    tdHint.textContent = recommendedHint(key);
-    tr.appendChild(tdHint);
-
-    const tdMode = document.createElement("td");
-    const sel = document.createElement("select");
-    const MODE_LABEL = { "one-shot": "mode.one_shot", "loop": "mode.loop" };
-    for (const m of ["one-shot", "loop"]) {
-      const opt = document.createElement("option");
-      opt.value = m;
-      opt.textContent = t(MODE_LABEL[m] || m);
-      sel.appendChild(opt);
+  const appendIpRows = (dir, specs) => {
+    for (const spec of specs) {
+      const key = `${dir}.ip.${spec}`;
+      const ch = channels[key] || {};
+      tbody.appendChild(buildChannelRow(key, ch, sortedSamples, {
+        onRemove: () => { _removeIpTrack(dir, spec); },
+      }));
     }
-    sel.value = (ch.mode || "one-shot");
-    sel.title = t("title.ch.mode");
-    sel.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { mode: sel.value } } });
-    });
-    tdMode.appendChild(sel);
-    tr.appendChild(tdMode);
+  };
 
-    const tdSample = document.createElement("td");
-    const selS = document.createElement("select");
-    for (const s of ["@none", ...sortedSamples]) {
-      const opt = document.createElement("option");
-      opt.value = s;
-      opt.textContent = sampleLabel(s);
-      selS.appendChild(opt);
+  if (inSpecs.length || outSpecs.length) {
+    if (inSpecs.length) {
+      tbody.appendChild(_groupRow(t("label.ip_in"), colCount));
+      appendIpRows("in", inSpecs);
     }
-    selS.value = (ch.sample && (ch.sample === "@none" || sortedSamples.includes(ch.sample)))
-      ? ch.sample
-      : (sortedSamples[0] ?? "@none");
-    selS.title = t("title.ch.sound");
-    selS.addEventListener("change", async () => {
-      await patchConfig({ channels: { [key]: { sample: selS.value } } });
-    });
-    tdSample.appendChild(selS);
-    tr.appendChild(tdSample);
-
-    const tdGain = document.createElement("td");
-    const gainWrap = document.createElement("div");
-    gainWrap.className = "sliderCell";
-    const inGain = document.createElement("input");
-    inGain.type = "range";
-    inGain.min = "0";
-    inGain.max = "1.0";
-    inGain.step = "0.005";
-    inGain.value = ch.gain ?? 0.12;
-    inGain.title = t("title.ch.vol");
-    const gainVal = document.createElement("span");
-    gainVal.className = "sliderVal num";
-    const setGainVal = () => { gainVal.textContent = (+inGain.value).toFixed(2); };
-    setGainVal();
-    inGain.addEventListener("input", () => {
-      setGainVal();
-      schedulePatch({ channels: { [key]: { gain: parseFloat(inGain.value) } } });
-    });
-    inGain.addEventListener("change", () => {
-      schedulePatch({ channels: { [key]: { gain: parseFloat(inGain.value) } } }, 0);
-    });
-    gainWrap.appendChild(inGain);
-    gainWrap.appendChild(gainVal);
-    tdGain.appendChild(gainWrap);
-    tr.appendChild(tdGain);
-
-    const tdRef = document.createElement("td");
-    const refWrap = document.createElement("div");
-    refWrap.className = "sliderCell";
-    const inRef = document.createElement("input");
-    inRef.type = "range";
-    inRef.min = "0";
-    inRef.max = "1000";
-    inRef.step = "1";
-    const REF_MIN = 1;
-    const REF_MAX = 50000;
-    const refFromPos = (pos) => {
-      const p = Math.max(0, Math.min(1000, pos)) / 1000.0;
-      const v = REF_MIN * Math.pow(REF_MAX / REF_MIN, p);
-      return Math.max(1, Math.round(v));
-    };
-    const posFromRef = (ref) => {
-      const v = Math.max(REF_MIN, Math.min(REF_MAX, ref || REF_MIN));
-      const p = Math.log(v / REF_MIN) / Math.log(REF_MAX / REF_MIN);
-      return Math.max(0, Math.min(1000, Math.round(p * 1000)));
-    };
-    const initialRef = Math.max(1, Math.round(ch.ref_pps ?? 50));
-    inRef.value = String(posFromRef(initialRef));
-    inRef.title = t("title.ch.ref");
-    const refVal = document.createElement("span");
-    refVal.className = "sliderVal num";
-    const setRefVal = () => { refVal.textContent = String(refFromPos(parseInt(inRef.value, 10))); };
-    setRefVal();
-    inRef.addEventListener("input", () => {
-      setRefVal();
-      schedulePatch({ channels: { [key]: { ref_pps: refFromPos(parseInt(inRef.value, 10)) } } });
-    });
-    inRef.addEventListener("change", () => {
-      schedulePatch({ channels: { [key]: { ref_pps: refFromPos(parseInt(inRef.value, 10)) } } }, 0);
-    });
-    refWrap.appendChild(inRef);
-    refWrap.appendChild(refVal);
-    tdRef.appendChild(refWrap);
-    tr.appendChild(tdRef);
-
-    const tdGamma = document.createElement("td");
-    const gammaWrap = document.createElement("div");
-    gammaWrap.className = "sliderCell";
-    const inGamma = document.createElement("input");
-    inGamma.type = "range";
-    inGamma.min = "0.1";
-    inGamma.max = "3";
-    inGamma.step = "0.05";
-    inGamma.value = ch.gamma ?? 0.75;
-    inGamma.title = t("title.ch.gamma");
-    const gammaVal = document.createElement("span");
-    gammaVal.className = "sliderVal num";
-    const setGammaVal = () => { gammaVal.textContent = (+inGamma.value).toFixed(2); };
-    setGammaVal();
-    inGamma.addEventListener("input", () => {
-      setGammaVal();
-      schedulePatch({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } });
-    });
-    inGamma.addEventListener("change", () => {
-      schedulePatch({ channels: { [key]: { gamma: parseFloat(inGamma.value) } } }, 0);
-    });
-    gammaWrap.appendChild(inGamma);
-    gammaWrap.appendChild(gammaVal);
-    tdGamma.appendChild(gammaWrap);
-    tr.appendChild(tdGamma);
-
-    const tdTest = document.createElement("td");
-    tdTest.className = "listen";
-    const m = document.createElement("button");
-    m.className = "mini";
-    m.textContent = uiState.mutedKeys.has(key) ? "M" : "M";
-    m.title = uiState.mutedKeys.has(key) ? t("title.ch.mute_on") : t("title.ch.mute_off");
-    if (uiState.mutedKeys.has(key)) m.classList.add("danger");
-    m.addEventListener("click", () => {
-      if (uiState.mutedKeys.has(key)) uiState.mutedKeys.delete(key);
-      else uiState.mutedKeys.add(key);
-      saveUiState();
-      if (audio) audio.setOverrides(uiState);
-      renderConfig();
-    });
-
-    const s = document.createElement("button");
-    s.className = "mini";
-    s.textContent = "S";
-    const isSolo = uiState.soloKey === key;
-    s.title = isSolo ? t("title.ch.solo_on") : t("title.ch.solo_off");
-    if (isSolo) s.classList.add("primary");
-    s.addEventListener("click", () => {
-      uiState.soloKey = (uiState.soloKey === key) ? null : key;
-      saveUiState();
-      if (audio) audio.setOverrides(uiState);
-      renderConfig();
-    });
-
-    const b = document.createElement("button");
-    b.className = "mini";
-    b.textContent = "▶";
-    b.addEventListener("click", () => {
-      if (!audio) return;
-      audio.playTest(key);
-    });
-    tdTest.appendChild(m);
-    tdTest.appendChild(s);
-    tdTest.appendChild(b);
-    tr.appendChild(tdTest);
-
-    tbody.appendChild(tr);
+    if (outSpecs.length) {
+      tbody.appendChild(_groupRow(t("label.ip_out"), colCount));
+      appendIpRows("out", outSpecs);
+    }
   }
 }
 
@@ -1231,6 +1382,27 @@ function sampleLabel(name) {
 }
 
 function keyInfo(key) {
+  if (key.startsWith("in.ip.") || key.startsWith("out.ip.")) {
+    const dir = key.startsWith("in.") ? "in" : "out";
+    const spec = key.slice((dir + ".ip.").length);
+    if (lang === "en") {
+      return [
+        dir === "in" ? "Direction: incoming (to your machine)" : "Direction: outgoing (from your machine)",
+        "",
+        `IP peer track: packets whose remote peer matches “${spec}”.`,
+        "Examples: track a specific server, CDN range, or local service.",
+        "If multiple rules match, the most specific wins (exact IP > range).",
+      ].join("\n");
+    }
+    return [
+      dir === "in" ? "Direction: entrant (vers ta machine)" : "Direction: sortant (depuis ta machine)",
+      "",
+      `Suivi IP: paquets dont l’IP distante correspond à “${spec}”.`,
+      "Exemples: suivre un serveur précis, une plage CDN, ou un service local.",
+      "Si plusieurs règles correspondent, la plus spécifique gagne (IP exacte > plage).",
+    ].join("\n");
+  }
+
   const dir = key.startsWith("in.") ? "in" : key.startsWith("out.") ? "out" : null;
   const suffix = key.includes(".") ? key.split(".").slice(1).join(".") : key;
   const isTotalAnyDir = key.endsWith(".total") && !dir;
@@ -1313,6 +1485,7 @@ function keyInfo(key) {
 }
 
 function recommendedHint(key) {
+  if (key.startsWith("in.ip.") || key.startsWith("out.ip.")) return t("hint.reco.disc");
   if (key === "net.total") return t("hint.reco.cont");
   if (key.startsWith("tcp.") || key.endsWith(".tcp")) return t("hint.reco.cont");
   if (key.startsWith("udp.") || key.endsWith(".udp")) return t("hint.reco.cont");
@@ -2480,6 +2653,7 @@ async function main() {
   attachRecordingControls();
   initSaveButton();
   initEnvironmentControls();
+  initIpTracksControls();
   initUpload();
   initSamplesRefresh();
   initSamplesPreviewGain();

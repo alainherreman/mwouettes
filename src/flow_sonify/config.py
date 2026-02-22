@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .ip_tracks import compile_ip_tracks
+
 
 @dataclass(frozen=True)
 class RiverConfig:
@@ -43,6 +45,7 @@ class ChannelConfig:
 class EnvironmentConfig:
     river: RiverConfig = RiverConfig()
     channels: dict[str, ChannelConfig] = field(default_factory=lambda: default_channels())
+    ip_tracks: dict[str, list[str]] = field(default_factory=dict)  # {"in":[...], "out":[...]} (canonical strings)
 
 
 def default_channels() -> dict[str, "ChannelConfig"]:
@@ -88,6 +91,7 @@ class AppConfig:
 
     environments: dict[str, EnvironmentConfig] = field(default_factory=dict)
     active_environment: str = ""
+    ip_tracks: dict[str, list[str]] = field(default_factory=dict)  # {"in":[...], "out":[...]} (canonical strings)
 
 
 def load_config(path: str | Path | None) -> AppConfig:
@@ -134,6 +138,7 @@ def _default_config_raw() -> dict[str, Any]:
         "environments": {
             "sous-bois": {
                 "river": {"sample": "river.ogg", "gain": 0.22, "ref_pps": 250.0, "gamma": 0.65, "cutoff_hz": 900.0},
+                "ip_tracks": {"in": [], "out": []},
                 "channels": {
                     "net.total": {"enabled": False, "mode": "loop", "sample": "river.ogg", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65},
                     "tcp.total": {"enabled": True, "mode": "loop", "sample": "wind.ogg", "freq_hz": 220.0, "duration_ms": 0, "gain": 0.12, "ref_pps": 140.0, "gamma": 0.70},
@@ -144,6 +149,7 @@ def _default_config_raw() -> dict[str, Any]:
             },
             "bord-de-mer": {
                 "river": {"sample": "waves.ogg", "gain": 0.24, "ref_pps": 250.0, "gamma": 0.65, "cutoff_hz": 900.0},
+                "ip_tracks": {"in": [], "out": []},
                 "channels": {
                     "net.total": {"enabled": False, "mode": "loop", "sample": "waves.ogg", "freq_hz": 0.0, "duration_ms": 0, "gain": 0.0, "ref_pps": 250.0, "gamma": 0.65},
                     "tcp.total": {"enabled": True, "mode": "loop", "sample": "wind.ogg", "freq_hz": 220.0, "duration_ms": 0, "gain": 0.12, "ref_pps": 140.0, "gamma": 0.70},
@@ -156,6 +162,46 @@ def _default_config_raw() -> dict[str, Any]:
         # channels is intentionally left empty: active_environment applies its channels.
         "channels": {},
     }
+
+
+def _parse_ip_tracks(raw: dict[str, Any]) -> tuple[dict[str, list[str]], bool]:
+    """
+    Returns (ip_tracks, has_explicit_ip_tracks).
+    ip_tracks format: {"in":[canonical...], "out":[canonical...]}.
+    """
+    if "ip_tracks" not in raw:
+        return {}, False
+    it = raw.get("ip_tracks")
+    if it is None:
+        return {}, True
+    if not isinstance(it, dict):
+        return {}, True
+    ins = it.get("in", []) or []
+    outs = it.get("out", []) or []
+    in_list = [str(x).strip() for x in (ins if isinstance(ins, list) else []) if str(x).strip()]
+    out_list = [str(x).strip() for x in (outs if isinstance(outs, list) else []) if str(x).strip()]
+    # Canonicalize + de-duplicate via compiler (keeps stable order).
+    c_in = [r.spec for r in compile_ip_tracks("in", in_list)]
+    c_out = [r.spec for r in compile_ip_tracks("out", out_list)]
+    return {"in": c_in, "out": c_out}, True
+
+
+def _apply_ip_tracks_to_channels(channels: dict[str, ChannelConfig], ip_tracks: dict[str, list[str]]) -> dict[str, ChannelConfig]:
+    compiled_in = compile_ip_tracks("in", (ip_tracks or {}).get("in", []) or [])
+    compiled_out = compile_ip_tracks("out", (ip_tracks or {}).get("out", []) or [])
+    wanted_keys = {r.key for r in (compiled_in + compiled_out)}
+
+    out = dict(channels)
+    # Drop stale ip.* channels that are no longer tracked.
+    for k in list(out.keys()):
+        if (k.startswith("in.ip.") or k.startswith("out.ip.")) and (k not in wanted_keys):
+            out.pop(k, None)
+
+    # Ensure every tracked IP has a channel entry (same UI as packets).
+    for k in sorted(wanted_keys):
+        if k not in out:
+            out[k] = ChannelConfig(mode="one-shot", sample="birds.ogg", freq_hz=1000.0, duration_ms=80, gain=0.12, ref_pps=10.0, gamma=0.85)
+    return out
 
 
 def parse_config(raw: dict[str, Any]) -> AppConfig:
@@ -223,6 +269,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
             environments[str(name)] = _parse_environment(env_raw)
 
     active_environment = str(raw.get("active_environment", "") or "")
+    ip_tracks, has_explicit_ip_tracks = _parse_ip_tracks(raw)
 
     # If an active environment is selected, apply it by default ONLY when no explicit
     # channel mapping was provided. In the UI, users select a preset once, then tweak
@@ -232,6 +279,10 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         river = env.river
         channels = env.channels
         channels = _with_missing_defaults(channels)
+        if not has_explicit_ip_tracks:
+            ip_tracks = env.ip_tracks or {}
+
+    channels = _apply_ip_tracks_to_channels(channels, ip_tracks)
 
     return AppConfig(
         sample_rate=sample_rate,
@@ -241,6 +292,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         channels=channels,
         environments=environments,
         active_environment=active_environment,
+        ip_tracks=ip_tracks,
     )
 
 
@@ -311,4 +363,5 @@ def _parse_environment(raw: dict[str, Any]) -> EnvironmentConfig:
     else:
         channels = _with_missing_defaults(channels)
 
-    return EnvironmentConfig(river=river, channels=channels)
+    ip_tracks, _has = _parse_ip_tracks({"ip_tracks": raw.get("ip_tracks")})
+    return EnvironmentConfig(river=river, channels=channels, ip_tracks=ip_tracks)
