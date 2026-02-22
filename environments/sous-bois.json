@@ -8,7 +8,7 @@
       "gamma": 0.85,
       "mode": "one-shot",
       "ref_pps": 20.0,
-      "sample": "birds.ogg"
+      "sample": "@none"
     },
     "icmp.total": {
       "duration_ms": 120,
@@ -18,7 +18,7 @@
       "gamma": 0.8,
       "mode": "one-shot",
       "ref_pps": 10.0,
-      "sample": "crow.ogg"
+      "sample": "@none"
     },
     "in.dns": {
       "duration_ms": 60,
@@ -28,7 +28,7 @@
       "gamma": 0.75,
       "mode": "one-shot",
       "ref_pps": 25.0,
-      "sample": "robin_full.ogg"
+      "sample": "robin.ogg"
     },
     "in.icmp": {
       "duration_ms": 140,
@@ -68,7 +68,7 @@
       "gamma": 0.65,
       "mode": "loop",
       "ref_pps": 250.0,
-      "sample": "river.ogg"
+      "sample": "@none"
     },
     "out.dns": {
       "duration_ms": 60,
@@ -78,7 +78,7 @@
       "gamma": 0.75,
       "mode": "one-shot",
       "ref_pps": 25.0,
-      "sample": "robin_full.ogg"
+      "sample": "robin.ogg"
     },
     "out.icmp": {
       "duration_ms": 140,
@@ -118,7 +118,7 @@
       "gamma": 0.7,
       "mode": "loop",
       "ref_pps": 140.0,
-      "sample": "wind.ogg"
+      "sample": "@none"
     },
     "udp.total": {
       "duration_ms": 0,
@@ -128,7 +128,7 @@
       "gamma": 0.75,
       "mode": "loop",
       "ref_pps": 100.0,
-      "sample": "river.ogg"
+      "sample": "@none"
     }
   },
   "name": "sous-bois",

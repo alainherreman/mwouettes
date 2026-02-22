@@ -34,4 +34,5 @@ Il installe par défaut:
 - `samples/owl.ogg`, `samples/owl_call.ogg`, `samples/crow.ogg`, `samples/raven.ogg`, `samples/frog.oga`, `samples/cricket.ogg`, `samples/dog.ogg`, `samples/nightingale.ogg`
 - `samples/meow.ogg`, `samples/sheep.ogg`, `samples/cow_moo.ogg`, `samples/rooster.ogg`, `samples/woodpecker_drum.ogg`
 - `samples/foghorn.ogg`, `samples/ship_horn_port.ogg`, `samples/boat_hull_lap.ogg`, `samples/rigging_clank.ogg`, `samples/bike_bell.ogg`, `samples/car_horn.wav`
-- `samples/sonar_ping.ogg`, `samples/whale.ogg`, `samples/sputnik_beep.ogg`, `samples/reactor.ogg`, `samples/sonic_boom.ogg`
+- `samples/foghorn_diaphone.ogg`
+- `samples/sonar_ping.ogg`, `samples/whale.ogg`, `samples/whale_song.ogg`, `samples/sputnik_beep.ogg`, `samples/reactor.ogg`, `samples/sonic_boom.ogg`

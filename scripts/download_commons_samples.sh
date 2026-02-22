@@ -42,11 +42,13 @@ set -euo pipefail
 #   - samples/owl_call.ogg (hibou/chouette)
 #   - samples/storm.ogg  (pluie + tonnerre)
 #   - samples/foghorn.ogg (corne de brume)
+#   - samples/foghorn_diaphone.ogg (corne de brume — diaphone)
 #   - samples/ship_horn_port.ogg (klaxon de navire (port))
 #   - samples/boat_hull_lap.ogg (coque qui tape / bateau au quai + clapot)
 #   - samples/rigging_clank.ogg (haubants/cordages qui claquent contre un mât)
 #   - samples/sonar_ping.ogg (sonar)
 #   - samples/whale.ogg  (baleine)
+#   - samples/whale_song.ogg  (chant des baleines)
 #   - samples/sputnik_beep.ogg (bip satellite)
 #   - samples/reactor.ogg (réacteur / accélération)
 #   - samples/sonic_boom.ogg (bang supersonique / “étoile filante”)
@@ -79,10 +81,20 @@ SHIP_HORN_SS="${SHIP_HORN_SS:-5.0}"
 SHIP_HORN_SILENCE_DB="${SHIP_HORN_SILENCE_DB:--40dB}"
 BOAT_HULL_LAP_S="${BOAT_HULL_LAP_S:-6.0}"
 BOAT_HULL_LAP_SS="${BOAT_HULL_LAP_SS:-12.0}"
+HULL_LAP_S="${HULL_LAP_S:-12.0}"
+WIND_COAST_S="${WIND_COAST_S:-16.0}"
+WIND_COAST_STEP="${WIND_COAST_STEP:-3.0}"
+DROPS_S="${DROPS_S:-0.6}"
+DROPS_STEP="${DROPS_STEP:-0.1}"
+CRICKET_S="${CRICKET_S:-1.2}"
+CRICKET_STEP="${CRICKET_STEP:-0.2}"
+REACTOR_STEP="${REACTOR_STEP:-1.5}"
+FOGHORN_S="${FOGHORN_S:-5.0}"
+FOGHORN_STEP="${FOGHORN_STEP:-2.0}"
 SONAR_S="${SONAR_S:-0.9}"
 WHALE_S="${WHALE_S:-2.8}"
 REACTOR_S="${REACTOR_S:-2.8}"
-REACTOR_SS="${REACTOR_SS:-6.0}"
+WHALE_SONG_S="${WHALE_SONG_S:-28.0}"
 FORCE="${FORCE:-0}"
 
 validate_magic() {
@@ -160,6 +172,100 @@ try_dl_any() {
 }
 
 ffmpeg_bin="$(command -v ffmpeg || true)"
+ffprobe_bin="$(command -v ffprobe || true)"
+python3_bin="$(command -v python3 || true)"
+
+_best_ss() {
+  # _best_ss input dur step metric(mean|max)
+  local in="$1"
+  local seg_dur="$2"
+  local step="$3"
+  local metric="${4:-mean}"
+
+  if [[ -z "$ffmpeg_bin" || -z "$ffprobe_bin" || -z "$python3_bin" ]]; then
+    echo "0"
+    return 0
+  fi
+
+  "$python3_bin" - "$in" "$seg_dur" "$step" "$metric" <<'PY'
+import math
+import re
+import subprocess
+import sys
+
+in_path = sys.argv[1]
+seg_dur = float(sys.argv[2])
+step = float(sys.argv[3])
+metric = sys.argv[4]
+
+def get_duration(path: str) -> float:
+    p = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", path],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        return float((p.stdout or "").strip() or "0")
+    except Exception:
+        return 0.0
+
+dur = get_duration(in_path)
+max_ss = max(0.0, dur - seg_dur)
+if step <= 0:
+    step = max(0.2, seg_dur / 3.0)
+
+pat_mean = re.compile(r"mean_volume:\\s*([\\-0-9.]+)\\s*dB")
+pat_max = re.compile(r"max_volume:\\s*([\\-0-9.]+)\\s*dB")
+
+best_val = -1e9
+best_ss = 0.0
+
+ss = 0.0
+iters = 0
+max_iters = 260
+if max_ss > 0 and step > 0:
+    max_iters = min(max_iters, int(math.ceil(max_ss / step)) + 1)
+
+while ss <= max_ss + 1e-6 and iters < max_iters:
+    iters += 1
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-v",
+        "info",
+        "-ss",
+        f"{ss:.3f}",
+        "-t",
+        f"{seg_dur:.3f}",
+        "-i",
+        in_path,
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
+        "-",
+    ]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    err = p.stderr or ""
+    m_mean = pat_mean.search(err)
+    m_max = pat_max.search(err)
+    val = None
+    if metric == "max" and m_max:
+        val = float(m_max.group(1))
+    elif metric == "mean" and m_mean:
+        val = float(m_mean.group(1))
+    elif m_mean:
+        val = float(m_mean.group(1))
+    elif m_max:
+        val = float(m_max.group(1))
+    if val is not None and val > best_val:
+        best_val = val
+        best_ss = ss
+    ss += step
+
+print(f\"{best_ss:.3f}\")
+PY
+}
 
 trim_audio() {
   # trim_audio input output duration_seconds [start_seconds]
@@ -222,6 +328,25 @@ trim_audio_no_leading_silence() {
   fi
 }
 
+trim_loudest() {
+  # trim_loudest input output duration_seconds metric(mean|max) step_seconds
+  local in="$1"
+  local out="$2"
+  local dur="$3"
+  local metric="${4:-mean}"
+  local step="${5:-1.0}"
+  if [[ -f "$out" && "$FORCE" != "1" ]]; then
+    echo "[skip] $out"
+    return 0
+  fi
+  if [[ ! -f "$in" ]]; then
+    return 0
+  fi
+  local ss="0"
+  ss="$(_best_ss "$in" "$dur" "$step" "$metric" 2>/dev/null || echo "0")"
+  trim_audio "$in" "$out" "$dur" "$ss"
+}
+
 transcode_audio() {
   # transcode_audio input output [duration_seconds] [start_seconds]
   local in="$1"
@@ -264,7 +389,7 @@ try_dl "$BASE/Howling_wind.ogg" "samples/wind.ogg"
 try_dl "$BASE/Wind_in_Swedish_pine_forest_at_25_mps.ogg" "samples/wind_forest_full.ogg"
 trim_audio "samples/wind_forest_full.ogg" "samples/wind_forest.ogg" "16.0" "0"
 try_dl "$BASE/Vento_fisterra.ogg" "samples/wind_coast_full.ogg"
-trim_audio "samples/wind_coast_full.ogg" "samples/wind_coast.ogg" "16.0" "0"
+trim_loudest "samples/wind_coast_full.ogg" "samples/wind_coast.ogg" "$WIND_COAST_S" "mean" "$WIND_COAST_STEP"
 try_dl "$BASE/Waves.ogg" "samples/waves.ogg"
 try_dl "$BASE/Oceanwavescrushing.ogg" "samples/waves_crushing_full.ogg"
 trim_audio "samples/waves_crushing_full.ogg" "samples/waves_crushing.ogg" "18.0" "0"
@@ -285,20 +410,23 @@ try_dl "$BASE/Gull_1.ogg" "samples/gulls.ogg"
 
 # Pluie / eau / orage
 try_dl "$BASE/Water_drops_dripping.ogg" "samples/drops_full.ogg"
-trim_audio "samples/drops_full.ogg" "samples/drops.ogg" "0.6" "0"
+trim_loudest "samples/drops_full.ogg" "samples/drops.ogg" "$DROPS_S" "max" "$DROPS_STEP"
 try_dl "$BASE/Rain.ogg" "samples/rain.ogg"
 try_dl "$BASE/Creaky_wooden_casket.ogg" "samples/wood_creak.ogg"
-try_dl "$BASE/Squeaks_and_twangs_of_greenwich_pier.ogg" "samples/hull_lapping.ogg"
+try_dl "$BASE/Squeaks_and_twangs_of_greenwich_pier.ogg" "samples/hull_lapping_full.ogg"
+trim_loudest "samples/hull_lapping_full.ogg" "samples/hull_lapping.ogg" "$HULL_LAP_S" "mean" "2.0"
 try_dl "$BASE/Lightning_Recorded_In_Groningen_2018-05-13_01.wav" "samples/lightning_full.wav"
 transcode_audio "samples/lightning_full.wav" "samples/lightning.ogg" "2.5" "0"
 try_dl "$BASE/Thunder_01.ogg" "samples/thunder.ogg"
 try_dl "$BASE/Rain_and_thunder_%2801%29.ogg" "samples/storm.ogg"
-try_dl "$BASE/East_Brother_Light_Diaphone_Foghorn.oga" "samples/foghorn_full.oga"
-trim_audio "samples/foghorn_full.oga" "samples/foghorn.ogg" "$HORN_S" "0"
+try_dl "$BASE/Fog_signal_Bremerhaven.ogg" "samples/foghorn_full.ogg"
+trim_loudest "samples/foghorn_full.ogg" "samples/foghorn.ogg" "$FOGHORN_S" "max" "$FOGHORN_STEP"
+try_dl "$BASE/East_Brother_Light_Diaphone_Foghorn.oga" "samples/foghorn_diaphone_full.oga"
+trim_audio "samples/foghorn_diaphone_full.oga" "samples/foghorn_diaphone.ogg" "$HORN_S" "0"
 try_dl "$BASE/Cruise_ship_Albatros_ship_horn.ogg" "samples/ship_horn_port_full.ogg"
 trim_audio "samples/ship_horn_port_full.ogg" "samples/ship_horn_port.ogg" "$SHIP_HORN_S" "$SHIP_HORN_SS"
 try_dl "$BASE/Boat_landing_at_a_wharf.ogg" "samples/boat_hull_lap_full.ogg"
-trim_audio "samples/boat_hull_lap_full.ogg" "samples/boat_hull_lap.ogg" "$BOAT_HULL_LAP_S" "$BOAT_HULL_LAP_SS"
+trim_loudest "samples/boat_hull_lap_full.ogg" "samples/boat_hull_lap.ogg" "$BOAT_HULL_LAP_S" "mean" "1.0"
 try_dl "$BASE/Ratched_cord_sounds.ogg" "samples/rigging_clank_full.ogg"
 trim_audio "samples/rigging_clank_full.ogg" "samples/rigging_clank.ogg" "2.0" "0"
 
@@ -309,6 +437,8 @@ try_dl_any "samples/whale_full.ogg" \
   "$BASE/Humpback_whale_moo.ogg" \
   "$BASE/Humpbackwhale2.ogg"
 trim_audio "samples/whale_full.ogg" "samples/whale.ogg" "$WHALE_S" "0"
+try_dl "$BASE/Humpbackwhale2.ogg" "samples/whale_song_full.ogg"
+trim_audio_no_leading_silence "samples/whale_song_full.ogg" "samples/whale_song.ogg" "$WHALE_SONG_S" "-45dB"
 try_dl "$BASE/Sputnik_beep.ogg" "samples/sputnik_beep.ogg"
 try_dl_any "samples/reactor_full.ogg" \
   "$BASE/WWS_SaabJ35DDrakenstartengineandtaxiing.ogg" \
@@ -316,7 +446,7 @@ try_dl_any "samples/reactor_full.ogg" \
   "$BASE/Mus%C3%A9e_d%C3%A9fense_a%C3%A9rienne_-_GE-404_turbojet.ogg" \
   "$BASE/Mus%C3%A9e_d%C3%A9fense_a%C3%A9rienne_-_Orenda_turbojet.ogg" \
   "$BASE/Jet_airliner_overhead.ogg"
-trim_audio "samples/reactor_full.ogg" "samples/reactor.ogg" "$REACTOR_S" "$REACTOR_SS"
+trim_loudest "samples/reactor_full.ogg" "samples/reactor.ogg" "$REACTOR_S" "mean" "$REACTOR_STEP"
 try_dl_any "samples/sonic_boom_full.ogg" \
   "$BASE/Sonic-boom-massive-sound.ogg" \
   "$BASE/Sonic_boom.ogg"
@@ -330,7 +460,8 @@ trim_audio "samples/crow_full.ogg" "samples/crow.ogg" "1.0" "0"
 try_dl "$BASE/Forest_Raven_Call.ogg" "samples/raven.ogg"
 try_dl "$BASE/Single_Frog_Croak.oga" "samples/frog_full.oga"
 trim_audio "samples/frog_full.oga" "samples/frog.oga" "1.2" "0"
-try_dl "$BASE/Field_cricket_Gryllus_pennsylvanicus.ogg" "samples/cricket.ogg"
+try_dl "$BASE/Field_cricket_Gryllus_pennsylvanicus.ogg" "samples/cricket_full.ogg"
+trim_loudest "samples/cricket_full.ogg" "samples/cricket.ogg" "$CRICKET_S" "max" "$CRICKET_STEP"
 try_dl "$BASE/Barking_of_a_dog.ogg" "samples/dog.ogg"
 try_dl "$BASE/Luscinia_megarhynchos_-_Common_Nightingale_XC131581.ogg" "samples/nightingale.ogg"
 try_dl "$BASE/Meow.ogg" "samples/meow.ogg"

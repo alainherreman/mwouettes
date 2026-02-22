@@ -298,7 +298,14 @@ def list_samples() -> list[str]:
             continue
         if p.suffix.lower() not in (".wav", ".mp3", ".ogg", ".oga"):
             continue
-        out.append(p.name)
+        name = p.name
+        low = name.lower()
+        # Hide intermediate/script-generated sources (keeps UI clean).
+        if low.endswith(("_full.ogg", "_full.oga", "_full.wav", "_full.mp3")):
+            continue
+        if ".tmp." in low:
+            continue
+        out.append(name)
     return sorted(out)
 
 
